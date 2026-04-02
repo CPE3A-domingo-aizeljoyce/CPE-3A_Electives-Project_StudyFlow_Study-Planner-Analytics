@@ -93,7 +93,7 @@ function AddTaskForm({ defaultDate, onAdd, onClose }) {
 
   const submit = () => {
     if (!form.title.trim()) { setError('Please enter a task title.'); return; }
-    
+    if (form.date < TODAY) { setError('Cannot add tasks to past dates.'); return; }
     const finalSubject = form.subject === 'Others' ? customSubject.trim() : form.subject;
     onAdd({ ...form, subject: finalSubject || 'Others' }); 
     onClose();
@@ -150,7 +150,14 @@ function AddTaskForm({ defaultDate, onAdd, onClose }) {
             </Field>
           </div>
           <Field label="Date">
-            <input type="date" className={cls} style={inputStyle} value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            <input 
+              type="date" 
+              className={cls} 
+              style={inputStyle} 
+              value={form.date} 
+              min={TODAY} 
+              onChange={e => setForm(f => ({ ...f, date: e.target.value }))} 
+            />
           </Field>
           <div className="grid grid-cols-2 gap-4">
             <Field label="Start time">
