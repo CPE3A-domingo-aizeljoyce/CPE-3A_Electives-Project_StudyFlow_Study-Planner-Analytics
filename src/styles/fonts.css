@@ -1,0 +1,60 @@
+/* ── Inter font from Google Fonts ─────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
+* {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  scrollbar-width: none;        /* Firefox — hide scrollbar track */
+  -ms-overflow-style: none;     /* IE / Edge */
+}
+
+*::-webkit-scrollbar {
+  display: none;                /* Chrome, Safari, Opera */
+}
+
+html, body {
+  height: 100%;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Vite mounts the app into #root — make it stretch full-height
+   so h-screen / flex layouts work correctly */
+#root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── StudyFlow CSS custom property defaults ───────────────────────────────── *
+ * Fallback values before AppearanceProvider.jsx mounts and writes the real
+ * values via JavaScript.  Dark theme (navy) is the default.
+ * ─────────────────────────────────────────────────────────────────────────── */
+:root {
+  --sf-bg:         #0d1117;
+  --sf-card:       #131929;
+  --sf-card2:      #0f1626;
+  --sf-border:     #1a2540;
+  --sf-text:       #e2e8f0;
+  --sf-text-sub:   #94a3b8;
+  --sf-text-muted: #64748b;
+
+  --accent:       #6366f1;
+  --accent-light: #8b5cf6;
+  --accent-rgb:   99,102,241;
+
+  /* Popup panel positions — overridden by JS in Layout.jsx */
+  --notif-left:   16px;
+  --profile-left: 16px;
+}
+
+/* Light theme overrides — set via data-theme="light" by AppearanceProvider */
+html[data-theme="light"] {
+  --sf-bg:         #f0f4f8;
+  --sf-card:       #ffffff;
+  --sf-card2:      #f1f5f9;
+  --sf-border:     #e2e8f0;
+  --sf-text:       #0f172a;
+  --sf-text-sub:   #475569;
+  --sf-text-muted: #94a3b8;
+}

@@ -1,0 +1,66 @@
+/*
+ * StudyFlow – base theme layer
+ *
+ * Comes after utilities.css in the import chain, so these
+ * element-level rules provide sensible defaults while utility
+ * classes (which have higher specificity as class selectors)
+ * always win.
+ */
+
+/* ── Heading defaults (utility classes override via specificity) ─ */
+h1 { font-size: 1.5rem;   line-height: 1.2; }
+h2 { font-size: 1.25rem;  line-height: 1.3; }
+h3 { font-size: 1.125rem; line-height: 1.4; }
+h4 { font-size: 1rem;     line-height: 1.5; }
+
+/* ── No-animation mode (toggled by Settings > Appearance) ─── */
+html[data-no-anim] *,
+html[data-no-anim] *::before,
+html[data-no-anim] *::after {
+  animation-duration:  0ms !important;
+  animation-delay:     0ms !important;
+  transition-duration: 0ms !important;
+  transition-delay:    0ms !important;
+}
+
+/* ── Light mode: override hard-coded white / slate classes ─── */
+html[data-theme="light"] .sf-root .text-white     { color: #0f172a !important; }
+html[data-theme="light"] .sf-root .text-slate-100 { color: #1e293b !important; }
+html[data-theme="light"] .sf-root .text-slate-200 { color: #334155 !important; }
+html[data-theme="light"] .sf-root .text-slate-300 { color: #475569 !important; }
+html[data-theme="light"] .sf-root .text-slate-400 { color: #64748b !important; }
+html[data-theme="light"] .sf-root .text-slate-500 { color: #94a3b8 !important; }
+
+/* Inputs / selects / textareas in light mode */
+html[data-theme="light"] .sf-root input,
+html[data-theme="light"] .sf-root select,
+html[data-theme="light"] .sf-root textarea {
+  color: #0f172a !important;
+  color-scheme: light;
+}
+html[data-theme="light"] .sf-root input::placeholder,
+html[data-theme="light"] .sf-root textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* ── Compact mode: reduce spacing (toggled by Settings) ────── */
+html[data-compact] .sf-root .p-6  { padding: 0.875rem !important; }
+html[data-compact] .sf-root .p-5  { padding: 0.75rem  !important; }
+html[data-compact] .sf-root .p-4  { padding: 0.625rem !important; }
+html[data-compact] .sf-root .mb-6 { margin-bottom: 1rem     !important; }
+html[data-compact] .sf-root .mb-5 { margin-bottom: 0.75rem  !important; }
+html[data-compact] .sf-root .gap-5 { gap: 0.75rem  !important; }
+html[data-compact] .sf-root .gap-4 { gap: 0.625rem !important; }
+
+/* ── Mobile: remove tap highlight on buttons ────────────────── */
+@media (max-width: 499px) {
+  button { -webkit-tap-highlight-color: transparent; }
+}
+
+/* ── Mobile popup panels snap to screen edges ───────────────── */
+@media (max-width: 639px) {
+  :root {
+    --notif-left:   8px;
+    --profile-left: 8px;
+  }
+}
