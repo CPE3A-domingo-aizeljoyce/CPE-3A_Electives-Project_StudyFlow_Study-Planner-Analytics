@@ -102,17 +102,20 @@ export function Login() {
       {/* Right panel (form) */}
       <div className="flex-1 flex flex-col items-center px-6 py-12 relative overflow-y-auto">
         <div style={{ flex: '1 0 auto' }} />
+        
+        {/* RESPONSIVE BACK BUTTON (Visible on Mobile & Desktop) */}
+        <button onClick={() => navigate(-1)}
+          className="absolute top-6 left-6 flex items-center gap-1.5 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all z-10"
+          style={{ fontWeight: 500 }}>
+          <ArrowLeft className="w-5 h-5" /> 
+          <span className="hidden sm:inline">Back</span>
+        </button>
+
         <button onClick={() => navigate('/')} className="lg:hidden flex items-center gap-2 mb-8">
           <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
             <Brain className="w-4 h-4 text-white" />
           </div>
           <span className="text-white text-sm" style={{ fontWeight: 700 }}>StudyFlow</span>
-        </button>
-
-        <button onClick={() => navigate('/')}
-          className="absolute top-8 left-8 hidden lg:flex items-center gap-1.5 text-slate-500 hover:text-slate-300 text-sm transition-colors"
-          style={{ fontWeight: 500 }}>
-          <ArrowLeft className="w-4 h-4" /> Back
         </button>
 
         <div className="w-full max-w-sm">

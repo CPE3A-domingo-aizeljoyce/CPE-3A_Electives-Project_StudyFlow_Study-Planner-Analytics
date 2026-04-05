@@ -89,49 +89,52 @@ export function Goals() {
       {showForm && (
         <div className="mb-5 p-4 rounded-2xl transition-all" style={{ background: colors.card, border: `1px solid rgba(${accent.rgb},0.3)`, boxShadow: `0 0 20px rgba(${accent.rgb},0.08)` }}>
           <h3 className="text-sm mb-4" style={{ fontWeight: 600, color: colors.text }}>Create New Goal</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input className="col-span-full px-3 py-2.5 rounded-xl text-sm outline-none" style={inputStyle}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            <input className="col-span-1 sm:col-span-2 px-3 py-2.5 rounded-xl text-sm outline-none w-full" style={inputStyle}
               placeholder="Goal title (e.g. Study 20 hours this week)"
               value={newGoal.title} onChange={e => setNewGoal({ ...newGoal, title: e.target.value })} />
             
             {/* Subject Dropdown & Conditional Custom Input */}
-            <div className="flex flex-col gap-2">
-              <select className="px-3 py-2.5 rounded-xl text-sm outline-none" style={inputStyle}
+            <div className="flex flex-col gap-2 w-full">
+              <select className="px-3 py-2.5 rounded-xl text-sm outline-none w-full" style={inputStyle}
                 value={newGoal.subject} onChange={e => setNewGoal({ ...newGoal, subject: e.target.value })}>
                 {subjects.map(s => (
                   <option key={s} value={s}>{s === 'Others' ? 'Others (Please specify)' : s}</option>
                 ))}
               </select>
               {newGoal.subject === 'Others' && (
-                <input type="text" className="px-3 py-2.5 rounded-xl text-sm outline-none" style={inputStyle}
+                <input type="text" className="px-3 py-2.5 rounded-xl text-sm outline-none w-full" style={inputStyle}
                   placeholder="Type specific subject..."
                   value={customSubject} onChange={e => setCustomSubject(e.target.value)} />
               )}
             </div>
 
-            <select className="px-3 py-2.5 rounded-xl text-sm outline-none" style={inputStyle}
+            <select className="px-3 py-2.5 rounded-xl text-sm outline-none w-full" style={inputStyle}
               value={newGoal.period} onChange={e => setNewGoal({ ...newGoal, period: e.target.value })}>
               <option value="weekly">Weekly</option>
               <option value="monthly">Monthly</option>
             </select>
-            <div className="flex gap-2">
-              <input type="number" className="flex-1 px-3 py-2.5 rounded-xl text-sm outline-none" style={inputStyle}
+            
+            {/* reponsiveness*/}
+            <div className="flex flex-col xs:flex-row gap-2 w-full">
+              <input type="number" className="flex-1 px-3 py-2.5 rounded-xl text-sm outline-none w-full" style={inputStyle}
                 placeholder="Target" value={newGoal.target} onChange={e => setNewGoal({ ...newGoal, target: Number(e.target.value) })} />
-              <input className="flex-1 px-3 py-2.5 rounded-xl text-sm outline-none" style={inputStyle}
+              <input className="flex-1 px-3 py-2.5 rounded-xl text-sm outline-none w-full" style={inputStyle}
                 placeholder="Unit (hrs, sessions...)" value={newGoal.unit} onChange={e => setNewGoal({ ...newGoal, unit: e.target.value })} />
             </div>
             
-            {/* Date Input with min validation added */}
-            <input type="date" min={today} className="px-3 py-2.5 rounded-xl text-sm outline-none" style={inputStyle}
+            <input type="date" min={today} className="px-3 py-2.5 rounded-xl text-sm outline-none w-full" style={inputStyle}
               value={newGoal.deadline} onChange={e => setNewGoal({ ...newGoal, deadline: e.target.value })} />
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap w-full">
               <span className="text-sm" style={{ color: colors.textSub }}>Color:</span>
-              {goalColors.map(c => (
-                <button key={c} onClick={() => setNewGoal({ ...newGoal, color: c })}
-                  className="w-6 h-6 rounded-full hover:scale-110 transition-transform"
-                  style={{ background: c, boxShadow: newGoal.color === c ? `0 0 0 2px ${colors.bg}, 0 0 0 4px ${c}` : 'none' }} />
-              ))}
+              <div className="flex gap-1.5 flex-wrap">
+                {goalColors.map(c => (
+                  <button key={c} onClick={() => setNewGoal({ ...newGoal, color: c })}
+                    className="w-6 h-6 rounded-full hover:scale-110 transition-transform"
+                    style={{ background: c, boxShadow: newGoal.color === c ? `0 0 0 2px ${colors.bg}, 0 0 0 4px ${c}` : 'none' }} />
+                ))}
+              </div>
             </div>
           </div>
           <div className="flex gap-2 mt-4">

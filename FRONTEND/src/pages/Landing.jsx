@@ -27,8 +27,8 @@ export function Landing() {
     <div className="min-h-screen" style={{ background: '#0d1117', fontFamily: "'Inter', sans-serif", color: '#e2e8f0' }}>
 
       {/* Nav */}
-      <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-12 py-4"
-        style={{ background: 'rgba(13,17,23,0.85)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(26,37,64,0.6)' }}>
+      <nav className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-5">
+        style={{ background: 'rgba(13,17,23,0.85)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(26,37,64,0.6)' }}
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center"
             style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.45)' }}>
@@ -191,9 +191,9 @@ export function Landing() {
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button onClick={() => navigate('/login?tab=signup')}
-              className="flex items-center gap-2 px-8 py-3.5 rounded-2xl text-white text-sm transition-all hover:scale-105"
-              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 30px rgba(99,102,241,0.4)', fontWeight: 600 }}>
-              Create free account <ArrowRight className="w-4 h-4" />
+              className="w-full px-4 py-3 sm:px-8 sm:py-4 text-sm sm:text-base font-semibold rounded-xl"
+              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.35)', fontWeight: 600 }}>
+              Create free account
             </button>
             <button onClick={() => navigate('/login')}
               className="px-8 py-3.5 rounded-2xl text-slate-300 text-sm hover:text-white transition-all"

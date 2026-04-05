@@ -347,18 +347,31 @@ function CalendarView({ tasks, onToggle, onRemove, onAddForDate }) {
             );
           })}
         </div>
+        
+        {/* --- INAYOS NA DAY PROGRESS SECTION WITH YOUR EXACT FORMULA --- */}
         {selTotal > 0 && (
-          <div className="px-4 pb-3 pt-2 shrink-0" style={{ borderTop: `1px solid ${colors.border}` }}>
-            <div className="flex justify-between text-xs mb-1.5">
-              <span style={{ color: colors.textMuted, fontWeight: 500 }}>Day progress</span>
-              <span style={{ color: accent.main, fontWeight: 700 }}>{Math.round((selDone / selTotal) * 100)}%</span>
+          <div className="px-4 pb-4 pt-3 shrink-0" style={{ borderTop: `1px solid ${colors.border}`, background: colors.card2 }}>
+            <div className="flex items-end justify-between mb-3">
+              <div>
+                <h3 className="text-xs" style={{ color: colors.textMuted, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Day progress</h3>
+              </div>
+              <span className="text-base" style={{ color: accent.main, fontWeight: 700 }}>
+                {Math.round((selDone / selTotal) * 100)}%
+              </span>
             </div>
-            <div className="h-2 rounded-full" style={{ background: colors.border }}>
-              <div className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${(selDone / selTotal) * 100}%`, background: `linear-gradient(90deg, ${accent.main}, #22c55e)` }} />
+            <div className="w-full h-2.5 rounded-full overflow-hidden" style={{ background: colors.border }}>
+              <div className="h-full rounded-full transition-all duration-700"
+                style={{ 
+                  width: `${(selDone / selTotal) * 100}%`, 
+                  background: `linear-gradient(90deg, ${accent.main}, #22c55e)`,
+                  boxShadow: `0 0 10px rgba(${accent.rgb}, 0.5)` 
+                }} 
+              />
             </div>
           </div>
         )}
+        {/* ------------------------------------------------------------- */}
+
       </div>
     </div>
   );
@@ -429,7 +442,7 @@ function KanbanCard({ task, onMoveCol, onRemove, onToggle }) {
 
       {/* Row 3: time + move buttons
            flex-wrap means buttons fall to next line on narrow cards instead
-           of ever pushing outside the card boundary.                         */}
+           of ever pushing outside the card boundary.                        */}
       <div className="flex items-center flex-wrap gap-1.5">
         <span className="flex items-center gap-1 text-xs flex-1 min-w-0" style={{ color: colors.textMuted }}>
           <Clock className="w-3 h-3 shrink-0" />
