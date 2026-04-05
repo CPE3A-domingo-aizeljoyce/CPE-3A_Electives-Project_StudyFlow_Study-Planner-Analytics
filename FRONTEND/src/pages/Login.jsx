@@ -60,18 +60,30 @@ export function Login() {
 
   return (
     <div className="h-screen flex overflow-hidden" style={{ background: '#0d1117', fontFamily: "'Inter', sans-serif" }}>
+      {/* Mobile Back Button (Fixed to viewport, always accessible) */}
+      <button onClick={() => navigate(-1)} 
+        className="lg:hidden fixed top-4 left-4 flex items-center gap-1.5 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all z-50"
+        style={{ fontWeight: 500 }}>
+        <ArrowLeft className="w-5 h-5" />
+      </button>
 
       {/* Left panel (desktop only) */}
       <div className="hidden lg:flex flex-col justify-between w-[420px] flex-shrink-0 p-10 overflow-y-auto"
         style={{ background: CARD2, borderRight: `1px solid ${BORDER}` }}>
         <div>
-          <button onClick={() => navigate('/')} className="flex items-center gap-2.5 mb-16 group">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.4)' }}>
-              <Brain className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-white text-base" style={{ fontWeight: 700 }}>StudyFlow</span>
-          </button>
+          <div className="flex items-center gap-2 mb-16">
+            <button onClick={() => navigate(-1)} className="flex items-center justify-center p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all"
+              style={{ fontWeight: 500 }}>
+              <ArrowLeft className="w-5 h-5" /> 
+            </button>
+            <button onClick={() => navigate('/')} className="flex items-center gap-2.5 group flex-1">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.4)' }}>
+                <Brain className="w-5 h-5 text-white" />
+              </div>
+              <span className="text-white text-base" style={{ fontWeight: 700 }}>StudyFlow</span>
+            </button>
+          </div>
 
           <h2 className="text-white text-2xl mb-3" style={{ fontWeight: 800, letterSpacing: '-0.5px' }}>
             Your academic<br />glow-up starts here.
@@ -100,19 +112,9 @@ export function Login() {
       </div>
 
       {/* Right panel (form) */}
-      <div className="flex-1 flex flex-col items-center px-4 sm:px-6 pt-20 pb-12 relative overflow-y-auto w-full">
-        <div style={{ flex: '1 0 auto' }} />
-        
-        {/* RESPONSIVE BACK BUTTON (Fixed for 320px and up) */}
-        <button onClick={() => navigate(-1)}
-          className="absolute top-4 left-4 sm:top-6 sm:left-6 flex items-center gap-1.5 p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all z-50"
-          style={{ fontWeight: 500 }}>
-          <ArrowLeft className="w-5 h-5" /> 
-          <span className="text-sm">Back</span>
-        </button>
-
-        {/* Mobile Logo (Adjusted margin so it doesn't hit the back button) */}
-        <button onClick={() => navigate('/')} className="lg:hidden flex flex-col items-center gap-2 mb-6 mt-12">
+      <div className="flex-1 flex flex-col items-center px-4 sm:px-6 py-12 pb-12 relative overflow-y-auto w-full">
+        {/* Mobile Logo */}
+        <button onClick={() => navigate('/')} className="lg:hidden flex flex-col items-center gap-2 mb-8">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
             <Brain className="w-5 h-5 text-white" />
           </div>
