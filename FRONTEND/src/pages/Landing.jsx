@@ -27,15 +27,17 @@ export function Landing() {
     <div className="min-h-screen" style={{ background: '#0d1117', fontFamily: "'Inter', sans-serif", color: '#e2e8f0' }}>
 
       {/* Nav */}
-      <nav className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-5">
-        style={{ background: 'rgba(13,17,23,0.85)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(26,37,64,0.6)' }}
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.45)' }}>
-            <Brain className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-white text-base" style={{ fontWeight: 700, letterSpacing: '-0.3px' }}>StudyFlow</span>
-        </div>
+      <nav 
+  className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-5"
+  style={{ background: 'rgba(13,17,23,0.85)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(26,37,64,0.6)' }}
+>
+  <div className="flex items-center gap-2.5">
+    <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+      style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.45)' }}>
+      <Brain className="w-5 h-5 text-white" />
+    </div>
+    <span className="text-white text-base" style={{ fontWeight: 700, letterSpacing: '-0.3px' }}>StudyFlow</span>
+  </div>
 
         <div className="hidden md:flex items-center gap-8">
           {['Features', 'How it works'].map(item => (
@@ -195,11 +197,11 @@ export function Landing() {
               style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.35)', fontWeight: 600 }}>
               Create free account
             </button>
-            <button onClick={() => navigate('/login')}
-              className="px-8 py-3.5 rounded-2xl text-slate-300 text-sm hover:text-white transition-all"
+            <button className="w-full px-2 py-3 sm:px-8 sm:py-4 text-xs min-[360px]:text-sm sm:text-base font-semibold rounded-xl whitespace-nowrap transition-all border border-slate-700 hover:bg-slate-800"
               style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', fontWeight: 500 }}>
               Already have an account
-            </button>
+            </button> 
+
           </div>
           <div className="flex items-center justify-center gap-6 mt-6">
             {['No credit card required', 'Free forever plan', 'Cancel anytime'].map(item => (
