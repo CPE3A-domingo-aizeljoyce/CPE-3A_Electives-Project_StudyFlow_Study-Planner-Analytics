@@ -51,8 +51,8 @@ function StatCard({ icon, label, value, sub, iconBg, colors }) {
   return (
     <div className="p-4 rounded-2xl flex flex-col gap-2.5 transition-all duration-200 hover:scale-[1.02]"
       style={{ background: colors.card, border: `1px solid ${colors.border}`, boxShadow: '0 4px 24px rgba(0,0,0,0.12)' }}>
-      <div className="flex items-center justify-between">
-        <span className="text-xs" style={{ color: colors.textSub }}>{label}</span>
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-xs truncate w-full" style={{ color: colors.textSub }}>{label}</span>
         <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0" style={{ background: iconBg }}>{icon}</div>
       </div>
       <div>
@@ -65,42 +65,34 @@ function StatCard({ icon, label, value, sub, iconBg, colors }) {
 
 // ─── Dashboard page ───────────────────────────────────────────────────────────
 export function Dashboard() {
-  // Live task data from shared context — same state as the Tasks page
   const { tasks, toggle } = useTasks();
   const [chartPeriod, setChartPeriod] = useState('W');
   const { accent, colors, showStreak, showXPBar, compactMode } = useAppearance();
 
   const lvl = getLevelInfo(DEMO_XP);
 
-  // ── Today's tasks (for Today's Schedule widget) ──────────────────────────
   const todayTasks = tasks
     .filter(t => t.date === TODAY)
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
 
-  // ── Overall productivity: uses ALL tasks so every Kanban move / toggle
-  //    instantly updates the score, not only changes to today's tasks ──────
   const allCompleted      = tasks.filter(t => t.done).length;
   const allTotal          = tasks.length;
   const productivityScore = allTotal === 0 ? 0 : Math.round((allCompleted / allTotal) * 100);
 
-  // ── Today-specific counts for the stat card sub-text ─────────────────────
   const todayDone    = todayTasks.filter(t => t.done).length;
   const todayTotal   = todayTasks.length;
 
-  // Weekly data
   const weeklyData = [
     { day: 'Mon', hours: 3.5 }, { day: 'Tue', hours: 4.2 },
     { day: 'Wed', hours: 2.8 }, { day: 'Thu', hours: 5.1 },
     { day: 'Fri', hours: 3.9 }, { day: 'Sat', hours: 6.2 }, { day: 'Sun', hours: 1.5 },
   ];
 
-  // Monthly data (last 4 weeks)
   const monthlyData = [
     { day: '4w ago', hours: 18.4 }, { day: '3w ago', hours: 22.1 },
     { day: '2w ago', hours: 25.7 }, { day: 'This wk', hours: weeklyData.reduce((s, d) => s + d.hours, 0) },
   ];
 
-  // Yearly data (last 12 months)
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   const yearlyData = [52,48,61,55,70,65,80,74,88,79,92,97].map((hours, i) => ({
     day: monthNames[i], hours,
@@ -138,7 +130,6 @@ export function Dashboard() {
           </div>
         </div>
         
-        {/* Dynamic Date */}
         <p className="text-xs mb-4" style={{ color: colors.textMuted }}>
           {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} · Your progress starts here.
         </p>
@@ -163,7 +154,7 @@ export function Dashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
 
         {/* Study Hours Chart with W/M/Y toggle */}
-        <div className="lg:col-span-2 p-4 rounded-2xl" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
+        <div className="lg:col-span-2 p-4 rounded-2xl min-w-0 overflow-hidden" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
           <div className="flex items-center justify-between mb-5">
             <div>
               <h3 className="text-base" style={{ fontWeight: 600, color: colors.text }}>
@@ -171,7 +162,6 @@ export function Dashboard() {
               </h3>
               <p className="text-xs mt-0.5" style={{ color: colors.textMuted }}>Total {periodLabel}: {periodTotal} hrs</p>
             </div>
-            {/* W / M / Y toggle */}
             <div className="flex gap-1 p-1 rounded-xl" style={{ background: colors.card2 ?? colors.bg, border: `1px solid ${colors.border}` }}>
               {['W', 'M', 'Y'].map(t => (
                 <button key={t} onClick={() => setChartPeriod(t)}
@@ -198,7 +188,7 @@ export function Dashboard() {
         </div>
 
         {/* Subject Breakdown */}
-        <div className="p-4 rounded-2xl" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
+        <div className="p-4 rounded-2xl min-w-0 overflow-hidden" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
           <h3 className="text-base mb-4" style={{ fontWeight: 600, color: colors.text }}>Subject Breakdown</h3>
           <ResponsiveContainer width="100%" height={180}>
             <BarChart data={fallbackSubjectData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
@@ -212,7 +202,7 @@ export function Dashboard() {
         </div>
 
         {/* Today's Tasks */}
-        <div className="lg:col-span-2 p-4 rounded-2xl" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
+        <div className="lg:col-span-2 p-4 rounded-2xl min-w-0 overflow-hidden" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-base" style={{ fontWeight: 600, color: colors.text }}>Today's Schedule</h3>
@@ -226,6 +216,7 @@ export function Dashboard() {
               View all <ChevronRight className="w-3 h-3" />
             </a>
           </div>
+          
           <div className="space-y-2">
             {todayTasks.length === 0 ? (
               <div className="text-center py-8" style={{ color: colors.textMuted }}>

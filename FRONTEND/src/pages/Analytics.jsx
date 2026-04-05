@@ -114,13 +114,12 @@ export function Analytics() {
 
       {/* Charts row 1 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-5">
-        <div className="lg:col-span-2 p-4 rounded-2xl" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
-          <div className="mb-5">
+        {/* responsiveness*/}
+        <div className="lg:col-span-2 p-4 rounded-2xl min-w-0 overflow-hidden" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
             <h3 className="text-base" style={{ fontWeight: 600, color: colors.text }}>{tab} Study Hours</h3>
             <p className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
               {tab === 'Weekly' ? 'Total: 27.2 hrs · Target: 28 hrs' : 'Total: 97.4 hrs · Target: 80 hrs'}
             </p>
-          </div>
           <ResponsiveContainer width="100%" height={200}>
             {tab === 'Weekly' ? (
               <AreaChart data={weeklyData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
@@ -185,7 +184,8 @@ export function Analytics() {
 
       {/* Charts row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <div className="p-4 rounded-2xl" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
+        {/* responsiveness chart 2*/}
+        <div className="p-4 rounded-2xl min-w-0 overflow-hidden" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
           <div className="mb-5">
             <h3 className="text-base" style={{ fontWeight: 600, color: colors.text }}>Peak Productivity Hours</h3>
             <p className="text-xs mt-0.5" style={{ color: colors.textMuted }}>Average sessions per time block</p>
@@ -213,7 +213,7 @@ export function Analytics() {
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
+        <div className="p-4 rounded-2xl min-w-0 overflow-hidden" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
           <h3 className="text-base mb-5" style={{ fontWeight: 600, color: colors.text }}>Subject Performance</h3>
           <div className="space-y-4">
             {subjectPie.map(s => {
