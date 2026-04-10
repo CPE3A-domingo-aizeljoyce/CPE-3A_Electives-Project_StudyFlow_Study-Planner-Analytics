@@ -19,3 +19,8 @@ export const fetchGoals = async () => {
   const response = await axios.get(API_URL, getConfig());
   return response.data;
 };
+
+export const updateGoal = async (goalId, currentAmount) => {
+  const response = await axios.put(`${API_URL}${goalId}`, { currentAmount }, getConfig());
+  return response.data;
+};

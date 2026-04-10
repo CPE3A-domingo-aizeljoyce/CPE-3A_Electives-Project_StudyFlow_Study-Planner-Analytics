@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAppearance } from '../components/AppearanceProvider';
 import { Plus, Target, Trash2, CheckCircle2, TrendingUp, Calendar } from 'lucide-react';
-import { createNewGoal, fetchGoals } from '../api/goalApi';
+import { createNewGoal, fetchGoals, updateGoal } from '../api/goalApi';
 
 const goalColors = ['#6366f1','#22c55e','#f97316','#8b5cf6','#06b6d4','#fbbf24','#ec4899'];
 const subjects   = ['General','Mathematics','Physics','Chemistry','Biology','English','History','Computer Science', 'Others'];
@@ -98,8 +98,21 @@ export function Goals() {
   };
 
   const removeGoal     = (id) => setGoals(goals.filter(g => g.id !== id));
-  const updateProgress = (id, change) =>
-    setGoals(goals.map(g => g.id === id ? { ...g, current: Math.max(0, g.current + change) } : g));
+
+  const updateProgress = async (id, change) => {
+    const goalToUpdate = goals.find(g => g.id === id);
+    if (!goalToUpdate) return;
+
+    const newAmount = Math.max(0, goalToUpdate.current + change);
+
+    setGoals(goals.map(g => g.id === id ? { ...g, current: newAmount } : g));
+
+    try {
+      await updateGoal(id, newAmount);
+    } catch (error) {
+      console.error("Database progress not saved:", error);
+    }
+  };
 
   return (
     <div className="p-4 min-h-full" style={{ background: colors.bg }}>
