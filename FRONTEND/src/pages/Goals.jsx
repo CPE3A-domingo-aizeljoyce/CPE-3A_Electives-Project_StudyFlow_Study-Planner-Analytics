@@ -1,55 +1,118 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAppearance } from '../components/AppearanceProvider';
 import { Plus, Target, Trash2, CheckCircle2, TrendingUp, Calendar } from 'lucide-react';
-
-const initialGoals = [
-  { id: 1, title: 'Study 20 hours this week',     subject: 'General',     current: 14.5, target: 20,  unit: 'hours',    period: 'weekly',  color: '#6366f1', deadline: '2026-03-29' },
-  { id: 2, title: 'Complete 50 Math sessions',    subject: 'Mathematics', current: 32,   target: 50,  unit: 'sessions', period: 'monthly', color: '#22c55e', deadline: '2026-03-31' },
-  { id: 3, title: 'Finish Physics textbook',       subject: 'Physics',     current: 7,    target: 12,  unit: 'chapters', period: 'monthly', color: '#f97316', deadline: '2026-03-31' },
-  { id: 4, title: '30-min daily reading streak',  subject: 'English',     current: 12,   target: 30,  unit: 'days',     period: 'monthly', color: '#8b5cf6', deadline: '2026-04-01' },
-  { id: 5, title: 'Solve 100 chemistry problems', subject: 'Chemistry',   current: 67,   target: 100, unit: 'problems', period: 'monthly', color: '#06b6d4', deadline: '2026-03-31' },
-];
+import { createNewGoal, fetchGoals, updateGoal } from '../api/goalApi';
 
 const goalColors = ['#6366f1','#22c55e','#f97316','#8b5cf6','#06b6d4','#fbbf24','#ec4899'];
-// Added 'Others' to the subjects array
 const subjects   = ['General','Mathematics','Physics','Chemistry','Biology','English','History','Computer Science', 'Others'];
 
 export function Goals() {
-  const [goals, setGoals]       = useState(initialGoals);
+  const [goals, setGoals] = useState([]); 
   const [showForm, setShowForm] = useState(false);
   const [filterPeriod, setFilter] = useState('all');
-  
-  // New state for the custom subject text input
   const [customSubject, setCustomSubject] = useState('');
 
-  const [newGoal, setNewGoal]   = useState({
-    title: '', subject: 'General', current: 0, target: 10,
-    unit: 'hours', period: 'weekly', color: '#6366f1', deadline: '2026-03-31',
+  const [newGoal, setNewGoal] = useState({
+    title: '',
+    subject: 'General',
+    period: 'weekly',
+    target: '',
+    unit: 'hours',
+    deadline: '',
+    color: '#6366f1'
   });
 
   const { colors, accent } = useAppearance();
   const inputStyle = { background: colors.card2, border: `1px solid ${colors.border}`, color: colors.text, colorScheme: colors.inputScheme };
 
+  useEffect(() => {
+    const getMyGoals = async () => {
+      try {
+        const data = await fetchGoals();
+        const formattedGoals = data.map(g => ({
+          id: g._id,
+          title: g.title,
+          subject: g.category,
+          current: g.currentAmount,
+          target: g.targetAmount,
+          unit: g.unit,
+          period: g.timeframe,
+          color: g.color,
+          deadline: g.deadline ? g.deadline.split('T')[0] : ''
+        }));
+        setGoals(formattedGoals);
+      } catch (error) {
+        console.error("Error loading goals:", error);
+      }
+    };
+    getMyGoals();
+  }, []);
+
   const filtered       = goals.filter(g => filterPeriod === 'all' || g.period === filterPeriod);
   const completedGoals = goals.filter(g => g.current >= g.target).length;
+  const today          = new Date().toISOString().split('T')[0];
 
-  // Get today's date in YYYY-MM-DD format for the date picker minimum limit
-  const today = new Date().toISOString().split('T')[0];
+  const submitHandler = async (e) => {
+    if(e) e.preventDefault(); 
 
-  const addGoal = () => { 
-    // Logic to check if 'Others' is selected, save the custom subject instead
     const finalSubject = newGoal.subject === 'Others' && customSubject.trim() !== '' 
       ? customSubject 
       : newGoal.subject;
 
-    setGoals([...goals, { ...newGoal, subject: finalSubject, id: Date.now() }]); 
-    setShowForm(false); 
-    setCustomSubject(''); // Reset custom subject input
+    try {
+     
+      const goalData = {
+        title: newGoal.title,
+        category: finalSubject,
+        timeframe: newGoal.period,
+        targetAmount: Number(newGoal.target),
+        unit: newGoal.unit,
+        deadline: newGoal.deadline,
+        color: newGoal.color
+      };
+      const savedGoal = await createNewGoal(goalData);
+      alert('Goal Created Successfully!');
+
+      const newFormattedGoal = {
+        id: savedGoal._id,
+        title: savedGoal.title,
+        subject: savedGoal.category,
+        current: savedGoal.currentAmount,
+        target: savedGoal.targetAmount,
+        unit: savedGoal.unit,
+        period: savedGoal.timeframe,
+        color: savedGoal.color,
+        deadline: savedGoal.deadline ? savedGoal.deadline.split('T')[0] : ''
+      };
+
+      setGoals([...goals, newFormattedGoal]);
+
+      setShowForm(false);
+      setCustomSubject('');
+      setNewGoal({ title: '', subject: 'General', period: 'weekly', target: '', unit: 'hours', deadline: '', color: '#6366f1' });
+
+    } catch (error) {
+      console.error(error);
+      alert('Error saving. Make sure your backend is running!');
+    }
   };
-  
+
   const removeGoal     = (id) => setGoals(goals.filter(g => g.id !== id));
-  const updateProgress = (id, change) =>
-    setGoals(goals.map(g => g.id === id ? { ...g, current: Math.max(0, g.current + change) } : g));
+
+  const updateProgress = async (id, change) => {
+    const goalToUpdate = goals.find(g => g.id === id);
+    if (!goalToUpdate) return;
+
+    const newAmount = Math.max(0, goalToUpdate.current + change);
+
+    setGoals(goals.map(g => g.id === id ? { ...g, current: newAmount } : g));
+
+    try {
+      await updateGoal(id, newAmount);
+    } catch (error) {
+      console.error("Database progress not saved:", error);
+    }
+  };
 
   return (
     <div className="p-4 min-h-full" style={{ background: colors.bg }}>
@@ -94,7 +157,6 @@ export function Goals() {
               placeholder="Goal title (e.g. Study 20 hours this week)"
               value={newGoal.title} onChange={e => setNewGoal({ ...newGoal, title: e.target.value })} />
             
-            {/* Subject Dropdown & Conditional Custom Input */}
             <div className="flex flex-col gap-2 w-full">
               <select className="px-3 py-2.5 rounded-xl text-sm outline-none w-full" style={inputStyle}
                 value={newGoal.subject} onChange={e => setNewGoal({ ...newGoal, subject: e.target.value })}>
@@ -115,10 +177,9 @@ export function Goals() {
               <option value="monthly">Monthly</option>
             </select>
             
-            {/* reponsiveness*/}
             <div className="flex flex-col xs:flex-row gap-2 w-full">
               <input type="number" className="flex-1 px-3 py-2.5 rounded-xl text-sm outline-none w-full" style={inputStyle}
-                placeholder="Target" value={newGoal.target} onChange={e => setNewGoal({ ...newGoal, target: Number(e.target.value) })} />
+                placeholder="Target" value={newGoal.target} onChange={e => setNewGoal({ ...newGoal, target: e.target.value })} />
               <input className="flex-1 px-3 py-2.5 rounded-xl text-sm outline-none w-full" style={inputStyle}
                 placeholder="Unit (hrs, sessions...)" value={newGoal.unit} onChange={e => setNewGoal({ ...newGoal, unit: e.target.value })} />
             </div>
@@ -138,7 +199,8 @@ export function Goals() {
             </div>
           </div>
           <div className="flex gap-2 mt-4">
-            <button onClick={addGoal} className="px-5 py-2 rounded-xl text-white text-sm hover:opacity-90"
+            {/* Tinawag na dito ang submitHandler */}
+            <button onClick={submitHandler} className="px-5 py-2 rounded-xl text-white text-sm hover:opacity-90"
               style={{ background: `linear-gradient(135deg, ${accent.main}, ${accent.light})`, fontWeight: 600 }}>
               Create Goal
             </button>
