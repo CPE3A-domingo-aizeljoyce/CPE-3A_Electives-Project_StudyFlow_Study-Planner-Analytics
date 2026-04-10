@@ -4,6 +4,7 @@ import cors       from 'cors';
 import helmet     from 'helmet';
 import connectDB  from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
+import goalRoutes from './routes/goalRoutes.js';
 
 dotenv.config();
 connectDB();
@@ -22,6 +23,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json({ limit: '10kb' }));
+app.use('/api/goals', goalRoutes);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
