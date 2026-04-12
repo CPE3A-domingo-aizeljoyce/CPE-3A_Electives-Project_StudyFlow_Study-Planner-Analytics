@@ -228,17 +228,22 @@ export const forgotPassword = async (req, res) => {
 
     // Google-only users have no password to reset
     if (user.googleId && !user.password)
-      return res.status(200).json({ message: safeMsg });
+      return res.status(200).json({
+        message: 'This account was created with Google. Please use "Continue with Google" to sign in.',
+        isGoogleAccount: true,   // frontend can use this to show a Google button
+      });
 
-    const rawToken = user.createPasswordResetToken();
-    await user.save();
-
+    const rawToken = user.createPasswordResetToken(); // generates token but not saved yet
     const resetUrl = `${process.env.CLIENT_URL}/reset-password?token=${rawToken}`;
 
     try {
       await sendPasswordResetEmail({ name: user.name, email: user.email, resetUrl });
+      await user.save();  // ← only save token to DB after email succeeds
     } catch (emailErr) {
       console.error('Password reset email failed to send:', emailErr.message);
+      return res.status(500).json({
+        message: 'We could not send the reset email. Please try again later.',
+      });
     }
 
     res.status(200).json({ message: safeMsg });
