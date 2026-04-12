@@ -40,8 +40,7 @@ export const updateGoalProgress = async (req, res) => {
       return res.status(401).json({ message: 'Not authorized' });
     }
 
-    goal.currentAmount = req.body.currentAmount;
-    const updatedGoal = await goal.save();
+    const updatedGoal = await Goal.findByIdAndUpdate(req.params.id, req.body, { new: true });
     
     res.status(200).json(updatedGoal);
   } catch (error) {

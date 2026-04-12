@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAppearance } from '../components/AppearanceProvider';
-import { Plus, Target, Trash2, CheckCircle2, TrendingUp, Calendar } from 'lucide-react';
-import { createNewGoal, fetchGoals, updateGoal } from '../api/goalApi';
+import { Plus, Target, Trash2, CheckCircle2, TrendingUp, Calendar, Edit } from 'lucide-react';
+import { createNewGoal, fetchGoals, updateGoal, editFullGoal } from '../api/goalApi';
 
 const goalColors = ['#6366f1','#22c55e','#f97316','#8b5cf6','#06b6d4','#fbbf24','#ec4899'];
 const subjects   = ['General','Mathematics','Physics','Chemistry','Biology','English','History','Computer Science', 'Others'];
@@ -11,6 +11,7 @@ export function Goals() {
   const [showForm, setShowForm] = useState(false);
   const [filterPeriod, setFilter] = useState('all');
   const [customSubject, setCustomSubject] = useState('');
+  const [editingId, setEditingId] = useState(null);
 
   const [newGoal, setNewGoal] = useState({
     title: '',
@@ -59,35 +60,64 @@ export function Goals() {
       ? customSubject 
       : newGoal.subject;
 
+    // --- BAGONG LOGIC: AUTO-ADJUST CURRENT PROGRESS ---
+    const existingGoal = editingId ? goals.find(g => g.id === editingId) : null;
+    let adjustedCurrent = existingGoal ? existingGoal.current : 0;
+    const newTarget = Number(newGoal.target);
+
+    // Kung binabaan ang target at sumobra ang current, i-cap natin para hindi mag-10/9
+    if (adjustedCurrent > newTarget) {
+      adjustedCurrent = newTarget; 
+    }
+    // --------------------------------------------------
+
     try {
-     
       const goalData = {
         title: newGoal.title,
         category: finalSubject,
         timeframe: newGoal.period,
-        targetAmount: Number(newGoal.target),
+        targetAmount: newTarget,
+        currentAmount: adjustedCurrent, // Ipasa natin ang tamang current sa backend
         unit: newGoal.unit,
         deadline: newGoal.deadline,
         color: newGoal.color
       };
-      const savedGoal = await createNewGoal(goalData);
-      alert('Goal Created Successfully!');
 
-      const newFormattedGoal = {
-        id: savedGoal._id,
-        title: savedGoal.title,
-        subject: savedGoal.category,
-        current: savedGoal.currentAmount,
-        target: savedGoal.targetAmount,
-        unit: savedGoal.unit,
-        period: savedGoal.timeframe,
-        color: savedGoal.color,
-        deadline: savedGoal.deadline ? savedGoal.deadline.split('T')[0] : ''
-      };
+      if (editingId) {
+        const updatedGoal = await editFullGoal(editingId, goalData);
+        alert('Goal Updated Successfully! ');
 
-      setGoals([...goals, newFormattedGoal]);
+        setGoals(goals.map(g => g.id === editingId ? {
+          ...g,
+          title: updatedGoal.title,
+          subject: updatedGoal.category,
+          target: updatedGoal.targetAmount,
+          current: updatedGoal.currentAmount, // I-update ang current sa UI
+          unit: updatedGoal.unit,
+          period: updatedGoal.timeframe,
+          color: updatedGoal.color,
+          deadline: updatedGoal.deadline ? updatedGoal.deadline.split('T')[0] : ''
+        } : g));
+      } else {
+        const savedGoal = await createNewGoal(goalData);
+        alert('Goal Created Successfully!');
+
+        const newFormattedGoal = {
+          id: savedGoal._id,
+          title: savedGoal.title,
+          subject: savedGoal.category,
+          current: savedGoal.currentAmount,
+          target: savedGoal.targetAmount,
+          unit: savedGoal.unit,
+          period: savedGoal.timeframe,
+          color: savedGoal.color,
+          deadline: savedGoal.deadline ? savedGoal.deadline.split('T')[0] : ''
+        };
+        setGoals([...goals, newFormattedGoal]);
+      }
 
       setShowForm(false);
+      setEditingId(null);
       setCustomSubject('');
       setNewGoal({ title: '', subject: 'General', period: 'weekly', target: '', unit: 'hours', deadline: '', color: '#6366f1' });
 
@@ -97,7 +127,7 @@ export function Goals() {
     }
   };
 
-  const removeGoal     = (id) => setGoals(goals.filter(g => g.id !== id));
+  const removeGoal = (id) => setGoals(goals.filter(g => g.id !== id));
 
   const updateProgress = async (id, change) => {
     const goalToUpdate = goals.find(g => g.id === id);
@@ -114,6 +144,24 @@ export function Goals() {
     }
   };
 
+  const handleEditClick = (goal) => {
+    setEditingId(goal.id);
+    setNewGoal({
+      title: goal.title,
+      subject: subjects.includes(goal.subject) ? goal.subject : 'Others',
+      period: goal.period,
+      target: goal.target,
+      unit: goal.unit,
+      deadline: goal.deadline,
+      color: goal.color
+    });
+    if (!subjects.includes(goal.subject)) {
+      setCustomSubject(goal.subject);
+    }
+    setShowForm(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' }); 
+  };
+
   return (
     <div className="p-4 min-h-full" style={{ background: colors.bg }}>
 
@@ -123,7 +171,7 @@ export function Goals() {
           <h1 className="text-2xl" style={{ fontWeight: 700, letterSpacing: '-0.4px', color: colors.text }}>Goals</h1>
           <p className="text-sm mt-0.5" style={{ color: colors.textSub }}>{completedGoals}/{goals.length} goals achieved</p>
         </div>
-        <button onClick={() => setShowForm(!showForm)}
+        <button onClick={() => { setShowForm(!showForm); setEditingId(null); setNewGoal({ title: '', subject: 'General', period: 'weekly', target: '', unit: 'hours', deadline: '', color: '#6366f1' }); }}
           className="flex items-center gap-2 px-3 py-2 rounded-xl text-white text-sm hover:opacity-90 hover:scale-105 transition-transform"
           style={{ background: `linear-gradient(135deg, ${accent.main}, ${accent.light})`, fontWeight: 600, boxShadow: `0 0 20px rgba(${accent.rgb},0.35)` }}>
           <Plus className="w-4 h-4" />
@@ -148,10 +196,12 @@ export function Goals() {
         ))}
       </div>
 
-      {/* Add Goal Form */}
+      {/* Add/Edit Goal Form */}
       {showForm && (
         <div className="mb-5 p-4 rounded-2xl transition-all" style={{ background: colors.card, border: `1px solid rgba(${accent.rgb},0.3)`, boxShadow: `0 0 20px rgba(${accent.rgb},0.08)` }}>
-          <h3 className="text-sm mb-4" style={{ fontWeight: 600, color: colors.text }}>Create New Goal</h3>
+          <h3 className="text-sm mb-4" style={{ fontWeight: 600, color: colors.text }}>
+            {editingId ? 'Edit Goal' : 'Create New Goal'}
+          </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             <input className="col-span-1 sm:col-span-2 px-3 py-2.5 rounded-xl text-sm outline-none w-full" style={inputStyle}
               placeholder="Goal title (e.g. Study 20 hours this week)"
@@ -199,12 +249,11 @@ export function Goals() {
             </div>
           </div>
           <div className="flex gap-2 mt-4">
-            {/* Tinawag na dito ang submitHandler */}
             <button onClick={submitHandler} className="px-5 py-2 rounded-xl text-white text-sm hover:opacity-90"
               style={{ background: `linear-gradient(135deg, ${accent.main}, ${accent.light})`, fontWeight: 600 }}>
-              Create Goal
+              {editingId ? 'Save Changes' : 'Create Goal'}
             </button>
-            <button onClick={() => setShowForm(false)} className="px-5 py-2 rounded-xl text-sm"
+            <button onClick={() => { setShowForm(false); setEditingId(null); setCustomSubject(''); setNewGoal({ title: '', subject: 'General', period: 'weekly', target: '', unit: 'hours', deadline: '', color: '#6366f1' }); }} className="px-5 py-2 rounded-xl text-sm"
               style={{ background: colors.card2, border: `1px solid ${colors.border}`, color: colors.textSub }}>
               Cancel
             </button>
@@ -257,6 +306,14 @@ export function Goals() {
                     </div>
                     <div className="text-xs" style={{ color: goal.color, fontWeight: 600 }}>{pct}%</div>
                   </div>
+                  
+                  {/* EDIT BUTTON */}
+                  <button onClick={() => handleEditClick(goal)}
+                    className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:text-blue-400 hover:bg-blue-400/10 transition-all"
+                    style={{ color: colors.textMuted }}>
+                    <Edit className="w-3.5 h-3.5" />
+                  </button>
+
                   <button onClick={() => removeGoal(goal.id)}
                     className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:text-red-400 hover:bg-red-400/10 transition-all"
                     style={{ color: colors.textMuted }}>
