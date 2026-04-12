@@ -1,24 +1,12 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
-// Using explicit SMTP settings instead of service:'gmail'
-// service:'gmail' forces port 465 (SSL) which many networks/ISPs block.
-// Port 587 (STARTTLS) works universally.
-const createTransporter = () =>
-  nodemailer.createTransport({
-    host:   'smtp.gmail.com',
-    port:   587,
-    secure: false,   // false = STARTTLS on 587 (NOT plain text)
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS,
-    },
-  });
+const getResend = () => new Resend(process.env.RESEND_API_KEY);
+const FROM      = () => process.env.EMAIL_FROM || 'onboarding@resend.dev';
 
 // ── Verification email ────────────────────────────────────────────────────────
 export const sendVerificationEmail = async ({ name, email, verificationUrl }) => {
-  const transporter = createTransporter();
-  await transporter.sendMail({
-    from:    `"StudyFlow" <${process.env.EMAIL_USER}>`,
+  await getResend().emails.send({
+    from:    FROM(),
     to:      email,
     subject: 'Verify your StudyFlow account',
     html: `
@@ -47,9 +35,8 @@ export const sendVerificationEmail = async ({ name, email, verificationUrl }) =>
 
 // ── Password reset email ──────────────────────────────────────────────────────
 export const sendPasswordResetEmail = async ({ name, email, resetUrl }) => {
-  const transporter = createTransporter();
-  await transporter.sendMail({
-    from:    `"StudyFlow" <${process.env.EMAIL_USER}>`,
+  await getResend().emails.send({
+    from:    FROM(),
     to:      email,
     subject: 'Reset your StudyFlow password',
     html: `
