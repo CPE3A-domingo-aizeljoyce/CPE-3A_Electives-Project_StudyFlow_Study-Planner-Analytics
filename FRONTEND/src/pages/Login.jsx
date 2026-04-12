@@ -113,6 +113,7 @@ export function Login() {
   const [forgotError,   setForgotError]   = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotSuccess, setForgotSuccess] = useState(false);
+  const [forgotIsGoogle, setForgotIsGoogle] = useState(false);
 
   // Remember Me — persisted across sessions
   const [rememberMe, setRememberMe] = useState(
@@ -271,6 +272,7 @@ export function Login() {
     setForgotEmail('');
     setForgotError('');
     setForgotSuccess(false);
+    setForgotIsGoogle(false);
   };
 
   const handleForgotSubmit = async (e) => {
@@ -294,8 +296,12 @@ export function Login() {
     setForgotLoading(true);
     setForgotError('');
     try {
-      await forgotPasswordApi(email);
-      setForgotSuccess(true);
+      const data = await forgotPasswordApi(email);
+      if (data?.isGoogleAccount) {
+        setForgotError(data.message);   
+      } else {
+        setForgotSuccess(true);
+      }
     } catch (err) {
       setForgotError(err.message || 'Something went wrong. Please try again.');
     } finally {
