@@ -47,11 +47,12 @@ function PieTooltip({ active, payload }) {
 
 // ─── Analytics Page ───────────────────────────────────────────────────────────
 export function Analytics() {
-  const [timeframe, setTimeframe] = useState('weekly');
+  const [timeframe, setTimeframe] = useState('daily'); // Set to daily by default based on your screenshot
   const [studyData, setStudyData] = useState([]);
   const { colors, accent } = useAppearance();
 
   // 1. Fetch REAL Data from Backend
+
   useEffect(() => {
     const getAnalytics = async () => {
       try {
@@ -64,6 +65,7 @@ export function Analytics() {
     getAnalytics();
   }, [timeframe]);
 
+  // 2. Math Logic & Data Processing (NO FALLBACKS)
   const { displayTotalHours, displayAvgDaily, displaySubjectPie, displayChartData, displayHourlyData } = useMemo(() => {
     const isDataEmpty = studyData.length === 0;
 
@@ -112,26 +114,43 @@ export function Analytics() {
         weeksMap[weekStr] += s.durationMinutes;
       });
       chartData = Object.keys(weeksMap).map(week => ({ week, hours: Number((weeksMap[week] / 60).toFixed(1)) }));
-    } else { // daily
+    } else { 
+
+      const baseHours = ['6AM', '8AM', '10AM', '12PM', '2PM', '4PM', '6PM', '8PM', '10PM'];
       const hoursMap = {};
+      baseHours.forEach(h => hoursMap[h] = 0);
+
       studyData.forEach(s => {
         const hour = new Date(s.date).getHours();
-        const label = `${hour % 12 || 12}${hour >= 12 ? 'PM' : 'AM'}`;
+        const blockHour = Math.floor(hour / 2) * 2; // Group into 2-hour blocks
+        let label = `${blockHour % 12 || 12}${blockHour >= 12 ? 'PM' : 'AM'}`;
+        if (blockHour === 0) label = '12AM';
         hoursMap[label] = (hoursMap[label] || 0) + s.durationMinutes;
       });
-      chartData = Object.keys(hoursMap).map(day => ({ day, hours: Number((hoursMap[day] / 60).toFixed(1)), target: 2 }));
+
+      const allLabels = ['12AM', '2AM', '4AM', '6AM', '8AM', '10AM', '12PM', '2PM', '4PM', '6PM', '8PM', '10PM'];
+      chartData = allLabels
+        .filter(label => hoursMap[label] !== undefined)
+        .map(day => ({ day, hours: Number((hoursMap[day] / 60).toFixed(1)), target: 2 }));
     }
 
     // Peak Productivity Grouping (Hourly Data)
     const productivityMap = {};
+    const baseHoursProd = ['6AM', '8AM', '10AM', '12PM', '2PM', '4PM', '6PM', '8PM', '10PM'];
+    baseHoursProd.forEach(h => productivityMap[h] = 0);
+
     studyData.forEach(s => {
        const hour = new Date(s.date).getHours();
-       const block = `${hour % 12 || 12}${hour >= 12 ? 'PM' : 'AM'}`;
-       productivityMap[block] = (productivityMap[block] || 0) + 1; // Count sessions
+       const blockHour = Math.floor(hour / 2) * 2;
+       let label = `${blockHour % 12 || 12}${blockHour >= 12 ? 'PM' : 'AM'}`;
+       if (blockHour === 0) label = '12AM';
+       productivityMap[label] = (productivityMap[label] || 0) + 1; // Count sessions
     });
-    const computedHourlyData = Object.keys(productivityMap).map(hour => ({
-        hour, sessions: productivityMap[hour]
-    }));
+
+    const allLabelsProd = ['12AM', '2AM', '4AM', '6AM', '8AM', '10AM', '12PM', '2PM', '4PM', '6PM', '8PM', '10PM'];
+    const computedHourlyData = allLabelsProd
+      .filter(label => productivityMap[label] !== undefined)
+      .map(hour => ({ hour, sessions: productivityMap[hour] }));
 
     return {
       displayTotalHours: totalHours,

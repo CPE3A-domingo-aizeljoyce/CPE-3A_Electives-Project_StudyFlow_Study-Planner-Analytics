@@ -316,6 +316,7 @@ export function StudyTimer() {
                 <select className="w-full px-4 py-2.5 rounded-xl text-sm outline-none text-center"
                   style={{ background: colors.card2, border: `1px solid ${colors.border}`, color: colors.text, colorScheme: colors.inputScheme }}
                   value={selectedTask} onChange={e => setSelectedTask(e.target.value)}>
+                  <option value="" disabled>Select a task...</option>
                   {tasks.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
