@@ -7,38 +7,6 @@ import {
 import { TrendingUp, Clock, Zap, BookOpen, Award } from 'lucide-react';
 import { fetchAnalyticsData } from '../api/analyticsApi';
 
-// ─── Dummy / Fallback Data  ────
-const fallbackWeekly = [
-  { day: 'Mon', hours: 3.5, target: 4 }, { day: 'Tue', hours: 4.2, target: 4 },
-  { day: 'Wed', hours: 2.8, target: 4 }, { day: 'Thu', hours: 5.1, target: 4 },
-  { day: 'Fri', hours: 3.9, target: 4 }, { day: 'Sat', hours: 6.2, target: 4 },
-  { day: 'Sun', hours: 1.5, target: 4 },
-];
-
-const fallbackMonthly = [
-  { week: 'Wk 1', hours: 22.4 }, { week: 'Wk 2', hours: 28.1 },
-  { week: 'Wk 3', hours: 19.7 }, { week: 'Wk 4', hours: 27.2 },
-];
-
-const fallbackDaily = [
-  { day: '8AM', hours: 1.2, target: 2 }, { day: '10AM', hours: 0.8, target: 2 },
-  { day: '2PM', hours: 2.1, target: 2 }, { day: '5PM',  hours: 1.5, target: 2 },
-];
-
-const fallbackSubjectPie = [
-  { name: 'Mathematics', value: 12.5, color: '#6366f1' },
-  { name: 'Physics',     value: 8.3,  color: '#22c55e' },
-  { name: 'Chemistry',   value: 6.7,  color: '#f97316' },
-  { name: 'Biology',     value: 9.1,  color: '#8b5cf6' },
-  { name: 'English',     value: 4.2,  color: '#06b6d4' },
-];
-
-const fallbackHourlyData = [
-  { hour: '6AM',  sessions: 1 }, { hour: '8AM',  sessions: 4 }, { hour: '10AM', sessions: 6 },
-  { hour: '12PM', sessions: 3 }, { hour: '2PM',  sessions: 5 }, { hour: '4PM',  sessions: 4 },
-  { hour: '6PM',  sessions: 7 }, { hour: '8PM',  sessions: 5 }, { hour: '10PM', sessions: 2 },
-];
-
 // ─── Tooltip components ───────────────────────────────────────────────────────
 function CustomTooltip({ active, payload, label }) {
   const { colors } = useAppearance();
@@ -83,6 +51,7 @@ export function Analytics() {
   const [studyData, setStudyData] = useState([]);
   const { colors, accent } = useAppearance();
 
+  // 1. Fetch REAL Data from Backend
   useEffect(() => {
     const getAnalytics = async () => {
       try {
@@ -95,17 +64,16 @@ export function Analytics() {
     getAnalytics();
   }, [timeframe]);
 
-  // 2. Math Logic & Data Processing
   const { displayTotalHours, displayAvgDaily, displaySubjectPie, displayChartData, displayHourlyData } = useMemo(() => {
     const isDataEmpty = studyData.length === 0;
 
     if (isDataEmpty) {
       return {
-        displayTotalHours: timeframe === 'monthly' ? '97.4' : timeframe === 'weekly' ? '27.2' : '5.6',
-        displayAvgDaily: '3.9',
-        displaySubjectPie: fallbackSubjectPie,
-        displayChartData: timeframe === 'monthly' ? fallbackMonthly : timeframe === 'weekly' ? fallbackWeekly : fallbackDaily,
-        displayHourlyData: fallbackHourlyData
+        displayTotalHours: '0.0',
+        displayAvgDaily: '0.0',
+        displaySubjectPie: [],
+        displayChartData: [],
+        displayHourlyData: []
       };
     }
 
@@ -154,12 +122,23 @@ export function Analytics() {
       chartData = Object.keys(hoursMap).map(day => ({ day, hours: Number((hoursMap[day] / 60).toFixed(1)), target: 2 }));
     }
 
+    // Peak Productivity Grouping (Hourly Data)
+    const productivityMap = {};
+    studyData.forEach(s => {
+       const hour = new Date(s.date).getHours();
+       const block = `${hour % 12 || 12}${hour >= 12 ? 'PM' : 'AM'}`;
+       productivityMap[block] = (productivityMap[block] || 0) + 1; // Count sessions
+    });
+    const computedHourlyData = Object.keys(productivityMap).map(hour => ({
+        hour, sessions: productivityMap[hour]
+    }));
+
     return {
       displayTotalHours: totalHours,
       displayAvgDaily: avgDaily,
       displaySubjectPie: computedSubjects,
       displayChartData: chartData,
-      displayHourlyData: fallbackHourlyData // (Requires complex grouping, keeping fallback visual for now)
+      displayHourlyData: computedHourlyData 
     };
   }, [studyData, timeframe]);
 
@@ -173,7 +152,6 @@ export function Analytics() {
           <p className="text-sm mt-0.5" style={{ color: colors.textSub }}>Detailed insights into your study habits</p>
         </div>
         
-        {/* DAILY, WEEKLY, MONTHLY BUTTONS */}
         <div className="flex gap-1 p-1 rounded-xl" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
           {['daily', 'weekly', 'monthly'].map(t => (
             <button key={t} onClick={() => setTimeframe(t)} className="px-4 py-2 rounded-lg text-sm transition-all capitalize"
@@ -190,7 +168,7 @@ export function Analytics() {
           { icon: <Clock      className="w-4 h-4 text-indigo-400" />, label: 'Total Study Time', value: `${displayTotalHours}h`, sub: `This ${timeframe}`,       bg: 'rgba(99,102,241,0.12)'  },
           { icon: <Zap        className="w-4 h-4 text-green-400"  />, label: 'Avg Daily Hours',  value: `${displayAvgDaily}h`,   sub: 'Active study',              bg: 'rgba(34,197,94,0.12)'   },
           { icon: <TrendingUp className="w-4 h-4 text-orange-400" />, label: 'Best Subject',     value: displaySubjectPie[0]?.name || '-', sub: 'Most hours logged', bg: 'rgba(249,115,22,0.12)'  },
-          { icon: <Award      className="w-4 h-4 text-purple-400" />, label: 'Productivity',     value: '87%',                   sub: '↑ 5% this week',            bg: 'rgba(139,92,246,0.12)'  },
+          { icon: <Award      className="w-4 h-4 text-purple-400" />, label: 'Sessions Logged',  value: studyData.length,        sub: 'Total completed',           bg: 'rgba(139,92,246,0.12)'  },
         ].map(k => (
           <div key={k.label} className="p-4 rounded-2xl" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
             <div className="flex items-center justify-between mb-2">
@@ -211,26 +189,30 @@ export function Analytics() {
               Total: {displayTotalHours} hrs logs
             </p>
           <ResponsiveContainer width="100%" height={200}>
-            {timeframe === 'monthly' ? (
-              <BarChart data={displayChartData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-                <CartesianGrid stroke={colors.chartGrid} strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="week" tick={{ fill: colors.textMuted, fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: colors.textMuted, fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: `rgba(${accent.rgb},0.06)` }} />
-                <Bar dataKey="hours" fill={accent.main} radius={[6,6,0,0]} name="hours" />
-              </BarChart>
+            {displayChartData.length > 0 ? (
+              timeframe === 'monthly' ? (
+                <BarChart data={displayChartData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+                  <CartesianGrid stroke={colors.chartGrid} strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="week" tick={{ fill: colors.textMuted, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: colors.textMuted, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: `rgba(${accent.rgb},0.06)` }} />
+                  <Bar dataKey="hours" fill={accent.main} radius={[6,6,0,0]} name="hours" />
+                </BarChart>
+              ) : (
+                <AreaChart data={displayChartData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+                  <CartesianGrid stroke={colors.chartGrid} strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="day" tick={{ fill: colors.textMuted, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: colors.textMuted, fontSize: 11 }} axisLine={false} tickLine={false} />
+                  <Tooltip content={<CustomTooltip />} cursor={{ stroke: colors.border, strokeWidth: 1 }} />
+                  <Area type="monotone" dataKey="target" stroke="#22c55e" strokeWidth={1.5} strokeDasharray="4 4" fill="#22c55e" fillOpacity={0.08} name="target" dot={false} />
+                  <Area type="monotone" dataKey="hours" stroke={accent.main} strokeWidth={2.5} fill={accent.main} fillOpacity={0.15} name="hours" dot={{ fill: accent.main, r: 4, strokeWidth: 0 }} activeDot={{ r: 6, fill: accent.light }} />
+                </AreaChart>
+              )
             ) : (
-              <AreaChart data={displayChartData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-                <CartesianGrid stroke={colors.chartGrid} strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="day" tick={{ fill: colors.textMuted, fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: colors.textMuted, fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip content={<CustomTooltip />} cursor={{ stroke: colors.border, strokeWidth: 1 }} />
-                <Area type="monotone" dataKey="target" stroke="#22c55e" strokeWidth={1.5} strokeDasharray="4 4" fill="#22c55e" fillOpacity={0.08} name="target" dot={false} />
-                <Area type="monotone" dataKey="hours" stroke={accent.main} strokeWidth={2.5} fill={accent.main} fillOpacity={0.15} name="hours" dot={{ fill: accent.main, r: 4, strokeWidth: 0 }} activeDot={{ r: 6, fill: accent.light }} />
-              </AreaChart>
+              <div className="flex items-center justify-center h-full text-sm" style={{ color: colors.textMuted }}>No study records for this timeframe yet</div>
             )}
           </ResponsiveContainer>
-          {timeframe !== 'monthly' && (
+          {timeframe !== 'monthly' && displayChartData.length > 0 && (
             <div className="flex gap-4 mt-3">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-0.5 rounded" style={{ background: accent.main }} />
@@ -270,7 +252,7 @@ export function Analytics() {
               </div>
             </>
           ) : (
-            <div className="flex items-center justify-center h-full text-xs" style={{ color: colors.textMuted }}>No data yet</div>
+            <div className="flex items-center justify-center h-[160px] text-xs" style={{ color: colors.textMuted }}>No data yet</div>
           )}
         </div>
       </div>
@@ -283,26 +265,32 @@ export function Analytics() {
             <p className="text-xs mt-0.5" style={{ color: colors.textMuted }}>Average sessions per time block</p>
           </div>
           <ResponsiveContainer width="100%" height={180}>
-            <BarChart data={displayHourlyData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
-              <CartesianGrid stroke={colors.chartGrid} strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="hour" tick={{ fill: colors.textMuted, fontSize: 10 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: colors.textMuted, fontSize: 10 }} axisLine={false} tickLine={false} />
-              <Tooltip content={<HeatmapTooltip />} cursor={{ fill: `rgba(${accent.rgb},0.06)` }} />
-              <Bar dataKey="sessions" radius={[4,4,0,0]}>
-                {displayHourlyData.map((entry, index) => (
-                  <Cell key={`hourly-cell-${index}`} fill={entry.sessions >= 6 ? accent.main : entry.sessions >= 4 ? accent.light : colors.border} />
-                ))}
-              </Bar>
-            </BarChart>
+            {displayHourlyData.length > 0 ? (
+              <BarChart data={displayHourlyData} margin={{ top: 4, right: 4, left: -28, bottom: 0 }}>
+                <CartesianGrid stroke={colors.chartGrid} strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="hour" tick={{ fill: colors.textMuted, fontSize: 10 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: colors.textMuted, fontSize: 10 }} axisLine={false} tickLine={false} />
+                <Tooltip content={<HeatmapTooltip />} cursor={{ fill: `rgba(${accent.rgb},0.06)` }} />
+                <Bar dataKey="sessions" radius={[4,4,0,0]}>
+                  {displayHourlyData.map((entry, index) => (
+                    <Cell key={`hourly-cell-${index}`} fill={entry.sessions >= 6 ? accent.main : entry.sessions >= 4 ? accent.light : colors.border} />
+                  ))}
+                </Bar>
+              </BarChart>
+            ) : (
+               <div className="flex items-center justify-center h-full text-xs" style={{ color: colors.textMuted }}>Complete a session to see your peak hours!</div>
+            )}
           </ResponsiveContainer>
-          <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-3">
-            {[{ label: 'Peak (6+)', color: accent.main }, { label: 'Active (4–5)', color: accent.light }, { label: 'Low (<4)', color: colors.border }].map(l => (
-              <div key={l.label} className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded" style={{ background: l.color }} />
-                <span className="text-xs" style={{ color: colors.textMuted }}>{l.label}</span>
-              </div>
-            ))}
-          </div>
+          {displayHourlyData.length > 0 && (
+            <div className="flex items-center flex-wrap gap-x-3 gap-y-1 mt-3">
+              {[{ label: 'Peak (6+)', color: accent.main }, { label: 'Active (4–5)', color: accent.light }, { label: 'Low (<4)', color: colors.border }].map(l => (
+                <div key={l.label} className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded" style={{ background: l.color }} />
+                  <span className="text-xs" style={{ color: colors.textMuted }}>{l.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="p-4 rounded-2xl min-w-0 overflow-hidden" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
