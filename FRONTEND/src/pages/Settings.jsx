@@ -6,9 +6,29 @@ const sections = [
   { id: 'profile',       label: 'Profile',        icon: User,    desc: 'Manage your account information' },
   { id: 'notifications', label: 'Notifications',  icon: Bell,    desc: 'Alerts and reminders'            },
   { id: 'timer',         label: 'Study Timer',    icon: Clock,   desc: 'Pomodoro and session settings'  },
-  { id: 'appearance',   label: 'Appearance',     icon: Palette, desc: 'Theme and display preferences'  },
-  { id: 'privacy',       label: 'Privacy & Data', icon: Shield,  desc: 'Data and account security'      },
+  { id: 'appearance',    label: 'Appearance',     icon: Palette, desc: 'Theme and display preferences'  },
+  { id: 'privacy',       label: 'Privacy & Data', icon: Shield,  desc: 'Data and account security'       },
 ];
+
+const LS_SETTINGS_KEY = 'sf_settings';
+
+const defaultProfile = {
+  name: 'Moran', email: 'secret@gmail.com', username: 'mrnski',
+  bio: 'CS student passionate about math and physics. Aiming for a perfect GPA!',
+  timezone: 'America/New_York', studyGoal: '4',
+};
+
+const defaultNotifs = {
+  taskReminders: true, breakReminders: true, dailyDigest: false,
+  achievementAlerts: true, streakWarning: true, weeklyReport: true,
+  emailNotifs: false, soundAlerts: true,
+};
+
+const defaultTimer = {
+  focusDuration: '25', shortBreak: '5', longBreak: '15',
+  sessionsBeforeLong: '4', autoStartBreaks: true, autoStartSessions: false,
+  soundEnabled: true, notifyOnComplete: true,
+};
 
 function Toggle({ value, onChange, accentRgb, colors }) {
   return (
@@ -21,6 +41,29 @@ function Toggle({ value, onChange, accentRgb, colors }) {
   );
 }
 
+function loadSavedSettings() {
+  try {
+    const raw = localStorage.getItem(LS_SETTINGS_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+// ----------------------------------------------------------------------
+// FIX: InputField moved OUTSIDE the Settings component so it doesn't 
+// get destroyed and lose focus on every re-render.
+// ----------------------------------------------------------------------
+function InputField({ label, value, onChange, type = 'text', placeholder = '', inputStyle, colors }) {
+  return (
+    <div>
+      <label className="block text-xs mb-1.5" style={{ fontWeight: 500, color: colors.textSub }}>{label}</label>
+      <input type={type} className="w-full px-3 py-2.5 rounded-xl text-sm outline-none" style={inputStyle}
+        value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
+    </div>
+  );
+}
+
 export function Settings() {
   const [activeSection, setActiveSection] = useState('profile');
   const {
@@ -29,35 +72,28 @@ export function Settings() {
     setTheme, setAccent, setCompact, setAnimations, setShowXPBar, setShowStreak,
   } = useAppearance();
 
-  const [profile, setProfile] = useState({
-    name: 'Moran', email: 'secret@gmail.com', username: 'mrnski',
-    bio: 'CS student passionate about math and physics. Aiming for a perfect GPA!',
-    timezone: 'America/New_York', studyGoal: '4',
+  const [savedSettings] = useState(() => loadSavedSettings() ?? {
+    profile: defaultProfile,
+    notifs: defaultNotifs,
+    timer: defaultTimer,
   });
-  const [notifs, setNotifs] = useState({
-    taskReminders: true, breakReminders: true, dailyDigest: false,
-    achievementAlerts: true, streakWarning: true, weeklyReport: true,
-    emailNotifs: false, soundAlerts: true,
-  });
-  const [timer, setTimer] = useState({
-    focusDuration: '25', shortBreak: '5', longBreak: '15',
-    sessionsBeforeLong: '4', autoStartBreaks: true, autoStartSessions: false,
-    soundEnabled: true, notifyOnComplete: true,
-  });
+
+  const [profile, setProfile] = useState(savedSettings.profile);
+  const [notifs, setNotifs] = useState(savedSettings.notifs);
+  const [timer, setTimer] = useState(savedSettings.timer);
   const [saved, setSaved] = useState(false);
-  const handleSave = () => { setSaved(true); setTimeout(() => setSaved(false), 2000); };
+  const handleSave = () => {
+    const payload = { profile, notifs, timer };
+    try {
+      localStorage.setItem(LS_SETTINGS_KEY, JSON.stringify(payload));
+    } catch {
+      // ignore storage failures
+    }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
 
   const inputStyle = { background: colors.card2, border: `1px solid ${colors.border}`, color: colors.text, colorScheme: colors.inputScheme };
-
-  function InputField({ label, value, onChange, type = 'text', placeholder = '' }) {
-    return (
-      <div>
-        <label className="block text-xs mb-1.5" style={{ fontWeight: 500, color: colors.textSub }}>{label}</label>
-        <input type={type} className="w-full px-3 py-2.5 rounded-xl text-sm outline-none" style={inputStyle}
-          value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} />
-      </div>
-    );
-  }
 
   const renderSection = () => {
     switch (activeSection) {
@@ -82,9 +118,9 @@ export function Settings() {
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <InputField label="Full Name"     value={profile.name}     onChange={v => setProfile({ ...profile, name: v })} />
-              <InputField label="Username"      value={profile.username} onChange={v => setProfile({ ...profile, username: v })} />
-              <InputField label="Email Address" type="email" value={profile.email} onChange={v => setProfile({ ...profile, email: v })} />
+              <InputField label="Full Name"     value={profile.name}     onChange={v => setProfile({ ...profile, name: v })} inputStyle={inputStyle} colors={colors} />
+              <InputField label="Username"      value={profile.username} onChange={v => setProfile({ ...profile, username: v })} inputStyle={inputStyle} colors={colors} />
+              <InputField label="Email Address" type="email" value={profile.email} onChange={v => setProfile({ ...profile, email: v })} inputStyle={inputStyle} colors={colors} />
               <div>
                 <label className="block text-xs mb-1.5" style={{ fontWeight: 500, color: colors.textSub }}>Timezone</label>
                 <select className="w-full px-3 py-2.5 rounded-xl text-sm outline-none" style={inputStyle}
@@ -294,9 +330,9 @@ export function Settings() {
             <div className="p-5 rounded-2xl" style={{ background: colors.card2, border: `1px solid ${colors.border}` }}>
               <h4 className="text-sm mb-3" style={{ fontWeight: 600, color: colors.text }}>Change Password</h4>
               <div className="space-y-3">
-                <InputField label="Current Password"     type="password" value="" onChange={() => {}} placeholder="••••••••" />
-                <InputField label="New Password"         type="password" value="" onChange={() => {}} placeholder="••••••••" />
-                <InputField label="Confirm New Password" type="password" value="" onChange={() => {}} placeholder="••••••••" />
+                <InputField label="Current Password"     type="password" value="" onChange={() => {}} placeholder="••••••••" inputStyle={inputStyle} colors={colors} />
+                <InputField label="New Password"         type="password" value="" onChange={() => {}} placeholder="••••••••" inputStyle={inputStyle} colors={colors} />
+                <InputField label="Confirm New Password" type="password" value="" onChange={() => {}} placeholder="••••••••" inputStyle={inputStyle} colors={colors} />
                 <button className="px-4 py-2 rounded-xl text-white text-sm"
                   style={{ background: `linear-gradient(135deg, ${accent.main}, ${accent.light})`, fontWeight: 600 }}>
                   Update Password
@@ -376,7 +412,7 @@ export function Settings() {
                 {saved && <Check className="w-4 h-4" />}
                 {saved ? 'Saved!' : 'Save Changes'}
               </button>
-              <p className="text-xs" style={{ color: colors.textMuted }}>Changes are saved to your local session</p>
+              <p className="text-xs" style={{ color: colors.textMuted }}>Changes are saved locally and will reload after refresh.</p>
             </div>
           )}
         </div>
