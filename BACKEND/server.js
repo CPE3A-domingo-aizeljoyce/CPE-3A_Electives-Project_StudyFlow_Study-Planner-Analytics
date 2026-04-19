@@ -1,20 +1,18 @@
+import 'dotenv/config';
 import express    from 'express';
-import dotenv     from 'dotenv';
 import cors       from 'cors';
 import helmet     from 'helmet';
 import connectDB  from './config/db.js';
 import authRoutes from './routes/authRoutes.js';
 import goalRoutes from './routes/goalRoutes.js';
+import notificationRoutes from './routes/notificationRoutes.js';
 
-dotenv.config();
 connectDB();
 
 const app = express();
 
 // ── Security ──────────────────────────────────────────────────────────────────
 app.use(helmet({
-  // Default helmet sets COOP: same-origin which blocks the Google OAuth
-  // popup from posting back to your app. Must be relaxed.
   crossOriginOpenerPolicy: { policy: 'unsafe-none' },
 }));
 
@@ -23,10 +21,11 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json({ limit: '10kb' }));
-app.use('/api/goals', goalRoutes);
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
+app.use('/api/goals', goalRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.get('/', (req, res) => res.send('StudyFlow API is running ✅'));
 
