@@ -24,6 +24,9 @@ const userSchema = new mongoose.Schema({
     select:    false,
   },
   googleId: { type: String, default: null },
+  googleRefreshToken: { type: String, default: null },
+  googleAccessToken: { type: String, default: null },
+  googleTokenExpiry: { type: Date, default: null },
   avatar:   { type: String, default: null },
 
   isVerified:          { type: Boolean, default: false },
