@@ -259,6 +259,7 @@ export function Goals() {
 
             <select className="px-3 py-2.5 rounded-xl text-sm outline-none w-full" style={inputStyle}
               value={newGoal.period} onChange={e => setNewGoal({ ...newGoal, period: e.target.value })}>
+              <option value="daily">Daily</option>
               <option value="weekly">Weekly</option>
               <option value="monthly">Monthly</option>
             </select>
