@@ -130,6 +130,7 @@ export function Analytics() {
         </div>
         <div className="flex gap-1 p-1 rounded-xl" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
           {['daily', 'weekly', 'monthly'].map(t => (
+            
             <button key={t} onClick={() => setTimeframe(t)} className="px-4 py-2 rounded-lg text-sm transition-all capitalize"
               style={timeframe === t ? { background: accent.main, color: '#fff', fontWeight: 600 } : { color: colors.textMuted }}>{t}</button>
           ))}
