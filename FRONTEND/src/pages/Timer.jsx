@@ -31,49 +31,83 @@ const MODE_COLORS = {
   long:  { color: '#06b6d4', glow: 'rgba(6,182,212,0.45)'   },
 };
 
-// ─── Load persisted mode config from localStorage ─────────────────────────────
-const loadModeConfig = (accentColor, accentGlow) => {
+const SETTINGS_KEY = 'sf_settings';
+const defaultTimerSettings = {
+  focusDuration: '25', shortBreak: '5', longBreak: '15',
+  sessionsBeforeLong: '4', autoStartBreaks: true, autoStartSessions: false,
+  soundEnabled: true, notifyOnComplete: true,
+};
+
+const defaultNotifSettings = {
+  taskReminders: true, breakReminders: true, dailyDigest: false,
+  achievementAlerts: true, streakWarning: true, weeklyReport: true,
+  emailNotifs: false, soundAlerts: true,
+};
+
+const parseTimerSettings = (payload) => ({
+  focusDuration: String(payload?.focusDuration || payload?.timer?.focusDuration || defaultTimerSettings.focusDuration),
+  shortBreak: String(payload?.shortBreak || payload?.timer?.shortBreak || defaultTimerSettings.shortBreak),
+  longBreak: String(payload?.longBreak || payload?.timer?.longBreak || defaultTimerSettings.longBreak),
+  sessionsBeforeLong: String(payload?.sessionsBeforeLong || payload?.timer?.sessionsBeforeLong || defaultTimerSettings.sessionsBeforeLong),
+  autoStartBreaks: payload?.autoStartBreaks ?? payload?.timer?.autoStartBreaks ?? defaultTimerSettings.autoStartBreaks,
+  autoStartSessions: payload?.autoStartSessions ?? payload?.timer?.autoStartSessions ?? defaultTimerSettings.autoStartSessions,
+  soundEnabled: payload?.soundEnabled ?? payload?.timer?.soundEnabled ?? defaultTimerSettings.soundEnabled,
+  notifyOnComplete: payload?.notifyOnComplete ?? payload?.timer?.notifyOnComplete ?? defaultTimerSettings.notifyOnComplete,
+  taskReminders: payload?.taskReminders ?? payload?.notifs?.taskReminders ?? defaultNotifSettings.taskReminders,
+  breakReminders: payload?.breakReminders ?? payload?.notifs?.breakReminders ?? defaultNotifSettings.breakReminders,
+});
+
+const parseMinutes = (value, fallback) => {
+  const num = Number(value);
+  return Number.isFinite(num) && num > 0 ? num * 60 : fallback;
+};
+
+const loadSavedTimerSettings = () => {
   try {
-    const saved = localStorage.getItem('studyModeConfig');
-    const base  = saved ? JSON.parse(saved) : {};
-    return {
-      work: {
-        ...defaultModeConfig.work,
-        ...(base.work  || {}),
-        icon:  Brain,
-        color: accentColor,
-        glow:  accentGlow,
-      },
-      short: {
-        ...defaultModeConfig.short,
-        ...(base.short || {}),
-        icon:  Coffee,
-        ...MODE_COLORS.short,
-      },
-      long: {
-        ...defaultModeConfig.long,
-        ...(base.long  || {}),
-        icon:  Coffee,
-        ...MODE_COLORS.long,
-      },
-    };
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    return parseTimerSettings(raw ? JSON.parse(raw) : null);
   } catch {
-    return {
-      work:  { ...defaultModeConfig.work,  icon: Brain,  color: accentColor, glow: accentGlow },
-      short: { ...defaultModeConfig.short, icon: Coffee, ...MODE_COLORS.short },
-      long:  { ...defaultModeConfig.long,  icon: Coffee, ...MODE_COLORS.long  },
-    };
+    return defaultTimerSettings;
   }
 };
 
-// ─── Save only label + duration (not colors/icons) ───────────────────────────
-const saveModeConfig = (cfg) => {
-  const toSave = {};
-  for (const k of ['work', 'short', 'long']) {
-    toSave[k] = { label: cfg[k].label, duration: cfg[k].duration };
-  }
-  localStorage.setItem('studyModeConfig', JSON.stringify(toSave));
+const loadModeConfig = (accentColor, accentGlow, timerSettings = null) => {
+  const settings = timerSettings || loadSavedTimerSettings();
+
+  const saved = localStorage.getItem('studyModeConfig');
+  const base  = saved ? JSON.parse(saved) : {};
+  const workDuration  = parseMinutes(settings.focusDuration, base.work?.duration || defaultModeConfig.work.duration);
+  const shortDuration = parseMinutes(settings.shortBreak,   base.short?.duration || defaultModeConfig.short.duration);
+  const longDuration  = parseMinutes(settings.longBreak,    base.long?.duration || defaultModeConfig.long.duration);
+
+  return {
+    work: {
+      ...defaultModeConfig.work,
+      ...(base.work  || {}),
+      duration: workDuration,
+      icon:  Brain,
+      color: accentColor,
+      glow:  accentGlow,
+    },
+    short: {
+      ...defaultModeConfig.short,
+      ...(base.short || {}),
+      duration: shortDuration,
+      icon:  Coffee,
+      ...MODE_COLORS.short,
+    },
+    long: {
+      ...defaultModeConfig.long,
+      ...(base.long  || {}),
+      duration: longDuration,
+      icon:  Coffee,
+      ...MODE_COLORS.long,
+    },
+  };
 };
+
+
+// ─── Timer mode labels are still stored locally, but durations are controlled by Settings only ───
 
 // ─── Web Audio: generates sounds without any external files ──────────────────
 const createSound = (type) => {
@@ -113,72 +147,17 @@ const createSound = (type) => {
   }
 };
 
-// ─── MinuteStepper ────────────────────────────────────────────────────────────
-function MinuteStepper({ value, color, onChange }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft]     = useState(String(value));
-  const ref = useRef(null);
-  const { colors } = useAppearance();
-
-  const open   = () => { setDraft(String(value)); setEditing(true); setTimeout(() => ref.current?.select(), 0); };
-  const commit = () => { const n = parseInt(draft, 10); if (!isNaN(n) && n >= 1 && n <= 180) onChange(n); setEditing(false); };
-
-  if (editing) return (
-    <div className="flex items-center gap-1">
-      <input ref={ref} type="number" min={1} max={180} value={draft}
-        onChange={e => setDraft(e.target.value)} onBlur={commit}
-        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-        className="w-14 rounded-lg px-2 py-1 text-sm text-center outline-none"
-        style={{ background: colors.card2, border: `1px solid ${color}`, color, fontWeight: 700 }} />
-      <span className="text-xs" style={{ color: colors.textMuted }}>min</span>
-      <button onClick={commit} className="text-green-400"><Check className="w-3.5 h-3.5" /></button>
-    </div>
-  );
-
-  return (
-    <button onClick={open} className="flex items-center gap-1.5 group" title="Click to edit">
-      <span className="text-sm px-2.5 py-0.5 rounded-lg group-hover:opacity-80 transition-opacity"
-        style={{ background: `${color}18`, color, fontWeight: 700 }}>
-        {value} min
-      </span>
-      <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: colors.textMuted }} />
-    </button>
-  );
-}
-
-// ─── LabelEditor ─────────────────────────────────────────────────────────────
-function LabelEditor({ value, color, onSave }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft]     = useState(value);
-  const ref = useRef(null);
-  const { colors } = useAppearance();
-
-  const open   = () => { setDraft(value); setEditing(true); setTimeout(() => ref.current?.select(), 0); };
-  const commit = () => { if (draft.trim()) onSave(draft.trim()); setEditing(false); };
-
-  if (editing) return (
-    <input ref={ref} value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit}
-      onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(false); }}
-      className="rounded-lg px-2 py-0.5 text-sm text-center outline-none w-28"
-      style={{ background: colors.card2, border: `1px solid ${color}`, color: colors.text, fontWeight: 600 }} />
-  );
-
-  return (
-    <button onClick={open} className="flex items-center gap-1 group">
-      <span className="text-sm" style={{ color: colors.textSub }}>{value}</span>
-      <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: colors.textMuted }} />
-    </button>
-  );
-}
 
 // ─── Study Timer Page ─────────────────────────────────────────────────────────
 export function StudyTimer() {
   const { colors, accent } = useAppearance();
   const accentGlow = `rgba(${accent.rgb},0.45)`;
 
+  const [timerSettings, setTimerSettings] = useState(loadSavedTimerSettings);
+
   // ── modeConfig: loaded from localStorage, colors injected fresh each time ──
   const [modeConfig, setModeConfig] = useState(() =>
-    loadModeConfig(accent.main, accentGlow)
+    loadModeConfig(accent.main, accentGlow, loadSavedTimerSettings())
   );
 
   // ── sessionGoal: persisted to localStorage ──────────────────────────────────
@@ -199,10 +178,7 @@ export function StudyTimer() {
   const [newTask,        setNewTask]       = useState('');
   const [editingTaskIdx, setEditingTaskIdx] = useState(null);
   const [editingTaskVal, setEditingTaskVal] = useState('');
-  const [soundEnabled,   setSoundEnabled]  = useState(() => {
-    const saved = localStorage.getItem('studySoundEnabled');
-    return saved === null ? true : saved === 'true';
-  });
+  const [soundEnabled,   setSoundEnabled]  = useState(() => loadSavedTimerSettings().soundEnabled);
   const [history,        setHistory]       = useState([]);
   const [settingsOpen,   setSettingsOpen]  = useState(false);
   const [statsOpen,      setStatsOpen]     = useState(false);
@@ -227,20 +203,135 @@ export function StudyTimer() {
     if (soundEnabledRef.current) createSound(type);
   };
 
-  // ── Persist modeConfig to localStorage (label + duration only) ────────────
-  useEffect(() => {
-    saveModeConfig(modeConfig);
-  }, [modeConfig]);
+  // ── Show notification when session completes ──────────────────────────────
+  const showSessionCompleteNotification = (sessionMode, nextMode) => {
+    if (!timerSettings.notifyOnComplete) return;
+    if (!('Notification' in window)) return;
+
+    const modeNames = { work: 'Focus Session', short: 'Short Break', long: 'Long Break' };
+    const modeEmojis = { work: '🎯', short: '☕', long: '🌟' };
+    
+    const sessionModeLabel = modeNames[sessionMode] || 'Session';
+    const title = `${modeEmojis[sessionMode] || '✓'} ${sessionModeLabel} Complete`;
+    const body = `${modeNames[nextMode]} is ready to begin.`;
+
+    try {
+      if (Notification.permission === 'granted') {
+        const notification = new Notification(title, {
+          body,
+          tag: 'study-timer',
+          requireInteraction: false,
+          silent: false,
+        });
+        notification.onclick = () => window.focus();
+      } else {
+        console.warn('Notification permission not granted');
+      }
+    } catch (error) {
+      console.error('Error showing notification:', error);
+    }
+  };
+
+  // ── Show task reminder when starting a focus session ──────────────────────
+  const showTaskReminder = () => {
+    if (!timerSettings.taskReminders) return;
+    if (!('Notification' in window)) return;
+
+    try {
+      if (Notification.permission === 'granted') {
+        const taskName = selectedTask || 'Study';
+        const notification = new Notification('📚 Focus Session Started', {
+          body: `Working on: ${taskName}. Stay focused!`,
+          tag: 'task-reminder',
+          requireInteraction: false,
+          silent: false,
+        });
+        notification.onclick = () => window.focus();
+      }
+    } catch (error) {
+      console.error('Error showing task reminder:', error);
+    }
+  };
+
+  // ── Show break reminder when on a long break ──────────────────────────────
+  const showBreakReminder = () => {
+    if (!timerSettings.breakReminders) return;
+    if (!('Notification' in window)) return;
+
+    try {
+      if (Notification.permission === 'granted') {
+        const notification = new Notification('☕ Time to Recharge', {
+          body: 'Take this time to rest and hydrate. You\'ve earned it!',
+          tag: 'break-reminder',
+          requireInteraction: false,
+          silent: false,
+        });
+        notification.onclick = () => window.focus();
+      }
+    } catch (error) {
+      console.error('Error showing break reminder:', error);
+    }
+  };
 
   // ── Persist sessionGoal ───────────────────────────────────────────────────
   useEffect(() => {
     localStorage.setItem('studySessionGoal', String(sessionGoal));
   }, [sessionGoal]);
 
-  // ── Persist soundEnabled ──────────────────────────────────────────────────
+  // ── Sync soundEnabled from timerSettings ─────────────────────────────────
   useEffect(() => {
-    localStorage.setItem('studySoundEnabled', String(soundEnabled));
-  }, [soundEnabled]);
+    setSoundEnabled(timerSettings.soundEnabled);
+  }, [timerSettings.soundEnabled]);
+
+  // ── Request notification permissions when any notification setting is enabled ─
+  useEffect(() => {
+    const needsPermission = timerSettings.notifyOnComplete || timerSettings.taskReminders || timerSettings.breakReminders;
+    if (needsPermission && 'Notification' in window) {
+      if (Notification.permission === 'default') {
+        Notification.requestPermission()
+          .then(permission => {
+            if (permission === 'granted') {
+              console.log('Notification permission granted');
+            }
+          })
+          .catch(error => console.error('Error requesting notification permission:', error));
+      }
+    }
+  }, [timerSettings.notifyOnComplete, timerSettings.taskReminders, timerSettings.breakReminders]);
+
+  // ── Listen for settings updates from the Settings page ────────────────────
+  useEffect(() => {
+    const handleTimerSettingsUpdated = (event) => {
+      const nextSettings = parseTimerSettings(event?.detail || loadSavedTimerSettings());
+      setTimerSettings(nextSettings);
+      setSoundEnabled(nextSettings.soundEnabled);
+    };
+
+    const handleStorageChange = (event) => {
+      if (event.key === SETTINGS_KEY) {
+        const nextSettings = parseTimerSettings(event.newValue ? JSON.parse(event.newValue) : null);
+        setTimerSettings(nextSettings);
+        setSoundEnabled(nextSettings.soundEnabled);
+      }
+    };
+
+    window.addEventListener('studyTimerSettingsUpdated', handleTimerSettingsUpdated);
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('studyTimerSettingsUpdated', handleTimerSettingsUpdated);
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
+
+  // ── Apply saved timer settings into current timer state ────────────────────
+  useEffect(() => {
+    const newModeConfig = loadModeConfig(accent.main, accentGlow, timerSettings);
+    setModeConfig(newModeConfig);
+
+    if (!running) {
+      setTimeLeft(newModeConfig[mode].duration);
+    }
+  }, [timerSettings, mode, running, accent.main, accentGlow]);
 
   // ── Sync work mode color with accent ─────────────────────────────────────
   useEffect(() => {
@@ -340,6 +431,13 @@ export function StudyTimer() {
       const subject  = selectedTask.split(' – ')[0] || selectedTask.split(' ')[0];
       const response = await startStudySession({ title: selectedTask, subject, mode, notes: '' });
       setActiveSession(response.data);
+      
+      // Show appropriate reminder based on session mode
+      if (mode === 'work') {
+        showTaskReminder();
+      } else if (mode === 'long') {
+        showBreakReminder();
+      }
     } catch (error) {
       setRunning(false);
       setTimeLeft(config.duration);
@@ -379,13 +477,15 @@ export function StudyTimer() {
   // ── Stop/Save ─────────────────────────────────────────────────────────────
   const handleStopSession = async () => {
     if (!activeSession) return;
+    const sessionId = activeSession._id;
+    setActiveSession(null);
+    setRunning(false);
+    setTimeLeft(config.duration);
+    setSessionNotes('');
+
     try {
       setSaving(true);
-      const response = await stopStudySession(activeSession._id, sessionNotes);
-      setActiveSession(null);
-      setRunning(false);
-      setTimeLeft(config.duration);
-      setSessionNotes('');
+      const response = await stopStudySession(sessionId, sessionNotes);
       setHistory(prev => [{
         label:    response.data.title,
         duration: formatDuration(response.data.duration - response.data.pausedDuration),
@@ -405,11 +505,31 @@ export function StudyTimer() {
   // ── Session complete (timer hits 0) ───────────────────────────────────────
   const handleSessionComplete = async () => {
     playSound('complete');
-    if (activeSession && mode === 'work') {
-      await handleStopSession();
-      const nextMode = sessions % 4 === 3 ? 'long' : 'short';
+    if (!activeSession) return;
+
+    const currentMode = mode;
+    await handleStopSession();
+
+    let nextMode;
+    if (currentMode === 'work') {
+      const sessionsBeforeLong = Number(timerSettings.sessionsBeforeLong) || 4;
+      nextMode = sessions % sessionsBeforeLong === sessionsBeforeLong - 1 ? 'long' : 'short';
       setMode(nextMode);
       setTimeLeft(modeConfig[nextMode].duration);
+      showSessionCompleteNotification(currentMode, nextMode);
+      
+      // Show break reminder if going to long break
+      if (nextMode === 'long') {
+        setTimeout(() => showBreakReminder(), 500);
+      }
+      
+      setRunning(timerSettings.autoStartBreaks);
+    } else {
+      nextMode = 'work';
+      setMode('work');
+      setTimeLeft(modeConfig.work.duration);
+      showSessionCompleteNotification(currentMode, nextMode);
+      setRunning(timerSettings.autoStartSessions);
     }
   };
   onCompleteRef.current = handleSessionComplete;
@@ -441,16 +561,6 @@ export function StudyTimer() {
 
   // ── Skip ──────────────────────────────────────────────────────────────────
   const skip = () => switchMode({ work: 'short', short: 'work', long: 'work' }[mode]);
-
-  // ── Update duration ───────────────────────────────────────────────────────
-  const updateDuration = (m, mins) => {
-    setModeConfig(prev => ({ ...prev, [m]: { ...prev[m], duration: mins * 60 } }));
-    if (m === mode && !running) setTimeLeft(mins * 60);
-  };
-
-  // ── Update label ──────────────────────────────────────────────────────────
-  const updateLabel = (m, label) =>
-    setModeConfig(prev => ({ ...prev, [m]: { ...prev[m], label } }));
 
   // ── Task management ───────────────────────────────────────────────────────
   const addTaskItem = () => {
@@ -538,53 +648,37 @@ export function StudyTimer() {
               <button onClick={() => setSettingsOpen(false)} style={{ color: colors.textMuted }}><X className="w-4 h-4" /></button>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {Object.keys(modeConfig).map(m => (
-                <div key={m} className="p-3.5 rounded-xl flex flex-col gap-3" style={{ background: colors.card2, border: `1px solid ${colors.border}` }}>
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 rounded-full" style={{ background: modeConfig[m].color }} />
-                    <LabelEditor value={modeConfig[m].label} color={modeConfig[m].color} onSave={v => updateLabel(m, v)} />
+              {[
+                { label: 'Focus Duration', value: timerSettings.focusDuration, color: accent.main },
+                { label: 'Short Break', value: timerSettings.shortBreak, color: '#22c55e' },
+                { label: 'Long Break', value: timerSettings.longBreak, color: '#06b6d4' },
+              ].map(item => (
+                <div key={item.label} className="p-3.5 rounded-xl" style={{ background: colors.card2, border: `1px solid ${colors.border}` }}>
+                  <div className="text-xs mb-1" style={{ color: colors.textMuted }}>{item.label}</div>
+                  <div className="text-xl font-semibold" style={{ color: item.color }}>{item.value} min</div>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-3 mt-4">
+              {[
+                { label: 'Auto-start Breaks', value: timerSettings.autoStartBreaks },
+                { label: 'Auto-start Sessions', value: timerSettings.autoStartSessions },
+                { label: 'Timer Sounds', value: timerSettings.soundEnabled },
+                { label: 'Session Complete Notification', value: timerSettings.notifyOnComplete },
+              ].map(opt => (
+                <div key={opt.label} className="flex items-center justify-between p-4 rounded-xl" style={{ background: colors.card2, border: `1px solid ${colors.border}` }}>
+                  <div>
+                    <div className="text-sm" style={{ fontWeight: 500, color: colors.text }}>{opt.label}</div>
+                    <div className="text-xs mt-0.5" style={{ color: colors.textMuted }}>{opt.value ? 'Enabled' : 'Disabled'}</div>
                   </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs" style={{ color: colors.textMuted }}>Duration</span>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => updateDuration(m, Math.max(1, Math.floor(modeConfig[m].duration / 60) - 1))}
-                        className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: colors.border, color: colors.textSub }}>
-                        <ChevronDown className="w-3.5 h-3.5" />
-                      </button>
-                      <MinuteStepper value={Math.floor(modeConfig[m].duration / 60)} color={modeConfig[m].color} onChange={v => updateDuration(m, v)} />
-                      <button onClick={() => updateDuration(m, Math.min(180, Math.floor(modeConfig[m].duration / 60) + 1))}
-                        className="w-6 h-6 rounded-lg flex items-center justify-center" style={{ background: colors.border, color: colors.textSub }}>
-                        <ChevronUp className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                  <div className="w-9 h-5 rounded-full" style={{ background: opt.value ? `rgba(${accent.rgb},0.25)` : colors.border }}>
+                    <div className="h-full rounded-full" style={{ width: opt.value ? '60%' : '15%', background: opt.value ? accent.main : colors.textMuted }} />
                   </div>
                 </div>
               ))}
             </div>
-            <div className="flex flex-wrap items-center gap-4 mt-4 pt-4" style={{ borderTop: `1px solid ${colors.border}` }}>
-              <div className="flex items-center gap-2.5">
-                <span className="text-xs" style={{ color: colors.textSub }}>Session goal</span>
-                {editingGoal ? (
-                  <input ref={goalRef} type="number" min={1} max={20} value={goalDraft}
-                    onChange={e => setGoalDraft(e.target.value)} onBlur={commitGoal}
-                    onKeyDown={e => { if (e.key === 'Enter') commitGoal(); if (e.key === 'Escape') setEditingGoal(false); }}
-                    className="w-14 rounded-lg px-2 py-1 text-sm text-center outline-none"
-                    style={{ background: colors.card2, border: `1px solid ${accent.main}`, color: accent.light, fontWeight: 700 }} />
-                ) : (
-                  <button onClick={openGoalEdit} className="flex items-center gap-1.5 group">
-                    <span className="text-xs px-2.5 py-0.5 rounded-lg" style={{ background: `rgba(${accent.rgb},0.15)`, color: accent.light, fontWeight: 700 }}>
-                      {sessionGoal} sessions
-                    </span>
-                    <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-60 transition-opacity" style={{ color: colors.textMuted }} />
-                  </button>
-                )}
-              </div>
-              <button onClick={() => setSoundEnabled(v => !v)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition-all"
-                style={{ background: soundEnabled ? `rgba(${accent.rgb},0.12)` : colors.border, border: `1px solid ${soundEnabled ? accent.main : colors.border}`, color: soundEnabled ? accent.light : colors.textMuted }}>
-                {soundEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-                Sound {soundEnabled ? 'On' : 'Off'}
-              </button>
+            <div className="mt-4 text-xs text-center" style={{ color: colors.textMuted }}>
+              Timer durations are controlled only from Settings. Your changes are saved permanently and persist across reloads.
             </div>
           </div>
         )}
