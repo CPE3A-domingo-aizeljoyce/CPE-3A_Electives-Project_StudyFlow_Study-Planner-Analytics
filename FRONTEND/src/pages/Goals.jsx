@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useAppearance } from '../components/AppearanceProvider';
-import { useNotificationRefresh } from '../components/NotificationRefreshContext';
 import { Plus, Target, Trash2, CheckCircle2, TrendingUp, Calendar, Edit, AlertCircle } from 'lucide-react';
 import { createNewGoal, fetchGoals, updateGoal, editFullGoal, deleteGoalAPI } from '../api/goalApi';
 
@@ -17,7 +16,6 @@ export function Goals() {
   const [goalToDelete, setGoalToDelete] = useState(null);
 
   const today = new Date().toISOString().split('T')[0];
-  const { refetch: refetchNotifications } = useNotificationRefresh();
 
   const [newGoal, setNewGoal] = useState({
     title: '',
@@ -25,7 +23,7 @@ export function Goals() {
     period: 'daily', 
     target: '',
     unit: 'hours',
-    startDate: today, // Added Start Date
+    startDate: today,
     deadline: '',
     color: '#6366f1'
   });
@@ -57,16 +55,12 @@ export function Goals() {
           deadline: g.deadline ? g.deadline.split('T')[0] : ''
         }));
         setGoals(formattedGoals);
-
-        // Auto-fetch reminder notifications (stale, deadline, overdue)
-        // Backend creates these when getGoals() is called
-        setTimeout(() => refetchNotifications(), 300);
       } catch (error) {
         console.error("Error loading goals:", error);
       }
     };
     getMyGoals();
-  }, [refetchNotifications]);
+  }, []);
 
   const filtered       = goals.filter(g => filterPeriod === 'all' || g.period === filterPeriod);
   const completedGoals = goals.filter(g => g.current >= g.target).length;
@@ -172,10 +166,6 @@ export function Goals() {
 
     try {
       await updateGoal(id, newAmount);
-
-      // Refetch notifications after ANY goal progress update
-      // Backend creates notifications for milestones: 25%, 50%, 75%, 90%, 100%
-      setTimeout(() => refetchNotifications(), 500);
     } catch (error) {
       console.error("Database progress not saved:", error);
       displayAlert('error', 'Progress not saved in backend.');
@@ -292,7 +282,7 @@ export function Goals() {
                 placeholder="Unit (hrs, sessions...)" value={newGoal.unit} onChange={e => setNewGoal({ ...newGoal, unit: e.target.value })} />
             </div>
             
-            {/* --- DYNAMIC DATE AREA (FROM & TO) --- */}
+            {/* Dynamic Date Area */}
             <div className="col-span-1 sm:col-span-2 p-3 rounded-xl transition-all" style={{ background: `rgba(${accent.rgb}, 0.05)`, border: `1px dashed rgba(${accent.rgb}, 0.4)` }}>
               <p className="text-xs mb-2 flex items-center gap-1.5" style={{ color: accent.main, fontWeight: 700 }}>
                 <Calendar className="w-3.5 h-3.5" />
@@ -316,7 +306,6 @@ export function Goals() {
                 </div>
               </div>
 
-              {/* Instruction Text for weekly and monthly */}
               {newGoal.period !== 'daily' && (
                 <p className="text-[11px] mt-2 italic" style={{ color: colors.textMuted }}>
                   * Select the target date when your {newGoal.period} cycle ends.
@@ -384,7 +373,6 @@ export function Goals() {
                       <span className="text-xs px-2 py-0.5 rounded-md" style={{ background: `${goal.color}20`, color: goal.color, fontWeight: 500 }}>{goal.subject}</span>
                       <div className="flex items-center gap-1 text-xs" style={{ color: colors.textMuted }}>
                         <Calendar className="w-3 h-3" />
-                        {/* UPDATE: Ipapakita rito yung Range kapag Daily */}
                         <span>{goal.period} · {goal.period === 'daily' && goal.startDate ? `${goal.startDate} to ` : ''}{goal.deadline || 'No target date'}</span>
                       </div>
                     </div>

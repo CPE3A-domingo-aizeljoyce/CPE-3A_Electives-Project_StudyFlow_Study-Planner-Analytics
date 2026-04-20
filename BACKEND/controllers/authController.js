@@ -5,7 +5,6 @@ import User               from '../models/User.js';
 import StudySession       from '../models/StudySession.js';
 import Task               from '../models/Task.js';
 import Goal               from '../models/goalModel.js';
-import Notification       from '../models/Notification.js';
 import { generateToken }  from '../utils/generateToken.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/sendEmail.js';
 

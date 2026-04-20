@@ -3,11 +3,11 @@ import express   from 'express';
 import cors      from 'cors';
 import helmet    from 'helmet';
 import connectDB from './config/db.js';
-import authRoutes         from './routes/authRoutes.js';
-import goalRoutes from './routes/goalRoutes.js';
-import taskRoutes         from './routes/taskRoutes.js';
-import notificationRoutes from './routes/notificationRoutes.js';
-import timerRoutes from './routes/timerRoutes.js';
+import authRoutes          from './routes/authRoutes.js';
+import goalRoutes          from './routes/goalRoutes.js';
+import taskRoutes          from './routes/taskRoutes.js';
+import timerRoutes         from './routes/timerRoutes.js';
+import achievementsRoutes  from './routes/achievementsRoutes.js';
 
 connectDB();
 
@@ -26,10 +26,10 @@ app.use(express.json({ limit: '10kb' }));
 
 // ── Routes ────────────────────────────────────────────────────────────────────
 app.use('/api/auth',          authRoutes);
-app.use('/api/goals', goalRoutes);
+app.use('/api/goals',         goalRoutes);
 app.use('/api/tasks',         taskRoutes);
-app.use('/api/notifications', notificationRoutes);
-app.use('/api/study-timer', timerRoutes);
+app.use('/api/study-timer',   timerRoutes);
+app.use('/api/achievements',  achievementsRoutes);
 
 app.get('/', (req, res) => res.send('StudyFlow API is running ✅'));
 

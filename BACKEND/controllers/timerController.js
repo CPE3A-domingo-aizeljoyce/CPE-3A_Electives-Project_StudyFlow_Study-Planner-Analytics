@@ -6,6 +6,7 @@ import {
   deleteTimeEntry,
   getTimeEntries,
 } from '../utils/clockifyService.js';
+import { checkAndAwardAchievements } from '../utils/achievementService.js'; // ← ADDED
 
 // ─── Helper: safe Clockify call (never crashes the main flow) ─────────────────
 const safeClockify = async (fn, label) => {
@@ -42,13 +43,11 @@ export const startStudySession = async (req, res) => {
       });
     }
 
-    // ── Clockify: start time entry ──────────────────────────────────────────
     const clockifyEntry = await safeClockify(
       () => startTimeEntry({ description: `${title} [${subject}]` }),
       'startTimeEntry'
     );
 
-    // ── Create DB session ───────────────────────────────────────────────────
     const studySession = await StudySession.create({
       user:            req.user._id,
       title,
@@ -88,7 +87,6 @@ export const pauseStudySession = async (req, res) => {
       return res.status(400).json({ message: 'Can only pause a running session' });
     }
 
-    // ── Clockify: stop the running timer ────────────────────────────────────
     await safeClockify(() => stopTimeEntry(), 'stopTimeEntry (pause)');
 
     studySession.pause();
@@ -122,7 +120,6 @@ export const resumeStudySession = async (req, res) => {
       return res.status(400).json({ message: 'Can only resume a paused session' });
     }
 
-    // ── Clockify: start a new time entry for the resumed session ────────────
     const clockifyEntry = await safeClockify(
       () => startTimeEntry({ description: `${studySession.title} [${studySession.subject}] (resumed)` }),
       'startTimeEntry (resume)'
@@ -164,13 +161,17 @@ export const stopStudySession = async (req, res) => {
       return res.status(400).json({ message: 'Session is already stopped' });
     }
 
-    // ── Clockify: stop the running timer ────────────────────────────────────
     await safeClockify(() => stopTimeEntry(), 'stopTimeEntry (stop)');
 
     if (notes !== undefined) studySession.notes = notes;
 
     studySession.stop();
     await studySession.save();
+
+    // ── Achievement hook: fire after session is fully saved ───────────────────
+    // Non-blocking: response is sent immediately, check runs in background
+    checkAndAwardAchievements(req.user._id)
+      .catch(err => console.error('[Achievements] stopStudySession hook error:', err.message));
 
     res.json({ success: true, data: studySession, message: 'Study session completed successfully' });
   } catch (error) {
@@ -200,10 +201,8 @@ export const abandonStudySession = async (req, res) => {
       return res.status(400).json({ message: 'Cannot abandon a completed session' });
     }
 
-    // ── Clockify: stop the timer if it was running ───────────────────────────
     await safeClockify(() => stopTimeEntry(), 'stopTimeEntry (abandon)');
 
-    // Delete the session entirely — user chose not to save it
     await StudySession.findByIdAndDelete(id);
 
     res.json({ success: true, message: 'Study session abandoned and removed' });
@@ -415,7 +414,6 @@ export const deleteStudySession = async (req, res) => {
       });
     }
 
-    // ── Clockify: delete the entry if it exists ──────────────────────────────
     if (studySession.clockifyEntryId) {
       await safeClockify(
         () => deleteTimeEntry(studySession.clockifyEntryId),

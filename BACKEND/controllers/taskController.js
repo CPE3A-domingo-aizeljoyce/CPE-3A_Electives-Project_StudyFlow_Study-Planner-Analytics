@@ -1,8 +1,11 @@
 import Task from '../models/Task.js';
 import User from '../models/User.js';
 import { google } from 'googleapis';
+import { checkAndAwardAchievements } from '../utils/achievementService.js';
 
 const calendar = google.calendar('v3');
+
+// ─── Google Calendar Helpers ──────────────────────────────────────────────────
 
 async function getOAuth2Client(userId) {
   const user = await User.findById(userId);
@@ -130,6 +133,8 @@ async function markTaskDoneInCalendarInternal(userId, googleEventId, isDone) {
   }
 }
 
+// ─── Task CRUD ────────────────────────────────────────────────────────────────
+
 // CREATE TASK
 export const createTask = async (req, res) => {
   try {
@@ -216,6 +221,9 @@ export const updateTask = async (req, res) => {
 
     const { title, subject, date, startTime, endTime, priority, status, done, description } = req.body;
 
+    // ── Track whether task was already done BEFORE this update ───────────────
+    const wasDoneBefore = task.done;
+
     if (title       !== undefined) task.title       = title;
     if (subject     !== undefined) task.subject     = subject;
     if (date        !== undefined) task.date        = new Date(date);
@@ -240,6 +248,12 @@ export const updateTask = async (req, res) => {
       } catch (calendarError) {
         console.warn('Failed to sync task to calendar:', calendarError.message);
       }
+    }
+
+    // ── Achievement hook: fire only when task JUST became done ───────────────
+    if (!wasDoneBefore && task.done) {
+      checkAndAwardAchievements(req.user.id)
+        .catch(err => console.error('[Achievements] updateTask hook error:', err.message));
     }
 
     res.status(200).json(task);
@@ -302,6 +316,12 @@ export const toggleTask = async (req, res) => {
       }
     }
 
+    // ── Achievement hook: fire only when task was just marked as done ─────────
+    if (task.done) {
+      checkAndAwardAchievements(req.user.id)
+        .catch(err => console.error('[Achievements] toggleTask hook error:', err.message));
+    }
+
     res.status(200).json(task);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -327,6 +347,9 @@ export const updateTaskStatus = async (req, res) => {
       return res.status(401).json({ message: 'Not authorized to update this task' });
     }
 
+    // ── Track whether task was already done BEFORE this update ───────────────
+    const wasDoneBefore = task.done;
+
     task.status = status;
     task.done   = status === 'done';
 
@@ -340,11 +363,19 @@ export const updateTaskStatus = async (req, res) => {
       }
     }
 
+    // ── Achievement hook: fire only when task JUST became done ───────────────
+    if (!wasDoneBefore && status === 'done') {
+      checkAndAwardAchievements(req.user.id)
+        .catch(err => console.error('[Achievements] updateTaskStatus hook error:', err.message));
+    }
+
     res.status(200).json(task);
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 };
+
+// ─── Calendar Integration ─────────────────────────────────────────────────────
 
 // SYNC SPECIFIC TASK TO CALENDAR
 export const syncTaskToCalendar = async (req, res) => {
@@ -443,10 +474,9 @@ export const getCalendarStats = async (req, res) => {
       stats.byColor[color] = (stats.byColor[color] || 0) + 1;
 
       if (event.start.dateTime && event.end.dateTime) {
-        const start           = new Date(event.start.dateTime);
-        const end             = new Date(event.end.dateTime);
-        const duration        = (end - start) / (1000 * 60);
-        stats.totalDuration  += duration;
+        const start          = new Date(event.start.dateTime);
+        const end            = new Date(event.end.dateTime);
+        stats.totalDuration += (end - start) / (1000 * 60);
       }
     });
 
