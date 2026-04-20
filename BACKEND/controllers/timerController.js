@@ -6,7 +6,7 @@ import {
   deleteTimeEntry,
   getTimeEntries,
 } from '../utils/clockifyService.js';
-import { checkAndAwardAchievements } from '../utils/achievementService.js'; // ← ADDED
+import { checkAndAwardAchievements } from '../utils/achievementService.js';
 
 // ─── Helper: safe Clockify call (never crashes the main flow) ─────────────────
 const safeClockify = async (fn, label) => {
@@ -40,6 +40,7 @@ export const startStudySession = async (req, res) => {
     if (existingSession) {
       return res.status(400).json({
         message: 'You already have an active study session. Please stop it before starting a new one.',
+        existingSession,
       });
     }
 
@@ -168,8 +169,7 @@ export const stopStudySession = async (req, res) => {
     studySession.stop();
     await studySession.save();
 
-    // ── Achievement hook: fire after session is fully saved ───────────────────
-    // Non-blocking: response is sent immediately, check runs in background
+    // Achievement hook — non-blocking
     checkAndAwardAchievements(req.user._id)
       .catch(err => console.error('[Achievements] stopStudySession hook error:', err.message));
 
@@ -222,6 +222,7 @@ export const getStudySessions = async (req, res) => {
       limit     = 10,
       status,
       subject,
+      mode,          // ← ADDED: filter by mode (work / short / long)
       startDate,
       endDate,
       sort      = '-startTime',
@@ -231,6 +232,7 @@ export const getStudySessions = async (req, res) => {
 
     if (status)  query.status  = status;
     if (subject) query.subject = new RegExp(subject, 'i');
+    if (mode)    query.mode    = mode;  // ← ADDED
 
     if (startDate || endDate) {
       query.startTime = {};
