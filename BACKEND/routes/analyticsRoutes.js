@@ -3,6 +3,7 @@ import { getAnalyticsData, saveStudySession } from '../controllers/analyticsCont
 import { protect } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
+
 router.route('/').get(protect, getAnalyticsData);
 router.route('/save').post(protect, saveStudySession);
 
