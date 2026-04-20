@@ -68,13 +68,30 @@ function Field({ label, children }) {
 }
 
 function AddTaskForm({ defaultDate, onAdd, onClose }) {
-  const [form, setForm]               = useState({ title: '', subject: 'Mathematics', date: defaultDate, startTime: '09:00', endTime: '10:00', priority: 'medium' });
+  const [form, setForm]               = useState({ title: '', subject: 'Mathematics', date: defaultDate, startTime: '09:00', endTime: '10:00', priority: 'medium', goal: '' });
   const [error, setError]             = useState('');
   const [customSubject, setCustomSubject] = useState('');
+  const [goals, setGoals]             = useState([]);
   const titleRef                      = useRef(null);
   const { colors, accent }            = useAppearance();
 
-  useEffect(() => { titleRef.current?.focus(); }, []);
+  useEffect(() => { 
+    titleRef.current?.focus(); 
+    // Fetch available goals
+    fetchGoals();
+  }, []);
+
+  const fetchGoals = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/api/goals', {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      const data = await response.json();
+      setGoals(data.data || data || []);
+    } catch (err) {
+      console.error('Failed to fetch goals:', err);
+    }
+  };
 
   const submit = () => {
     if (!form.title.trim())             { setError('Please enter a task title.');           return; }
@@ -130,6 +147,14 @@ function AddTaskForm({ defaultDate, onAdd, onClose }) {
               </select>
             </Field>
           </div>
+          <Field label="Link to Goal (Optional)">
+            <select className={cls} style={inputStyle} value={form.goal} onChange={e => setForm(f => ({ ...f, goal: e.target.value }))}>
+              <option value="">No goal</option>
+              {goals.length > 0 && goals.map(g => (
+                <option key={g._id} value={g._id}>{g.title}</option>
+              ))}
+            </select>
+          </Field>
           <Field label="Date">
             <input type="date" className={cls} style={inputStyle} value={form.date} min={TODAY}
               onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />

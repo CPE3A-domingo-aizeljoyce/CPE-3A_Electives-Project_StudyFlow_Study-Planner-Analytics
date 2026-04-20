@@ -37,6 +37,12 @@ const taskSchema = new mongoose.Schema({
     enum: ['high', 'medium', 'low'],
     default: 'medium',
   },
+  goal: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Goal',
+    required: false 
+  },
+  
   status: {
     type: String,
     enum: ['todo', 'in-progress', 'done'],

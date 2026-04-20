@@ -1,6 +1,7 @@
 import Task from '../models/Task.js';
 import User from '../models/User.js';
 import { google } from 'googleapis';
+import Goal from '../models/goalModel.js';
 import { checkAndAwardAchievements } from '../utils/achievementService.js';
 
 const calendar = google.calendar('v3');
@@ -360,6 +361,20 @@ export const updateTaskStatus = async (req, res) => {
         await markTaskDoneInCalendarInternal(req.user.id, task.googleEventId, task.done);
       } catch (calendarError) {
         console.warn('Failed to update task in calendar:', calendarError.message);
+      }
+    }
+
+    // ── AUTO-PROGRESS: Update goal progress when task status changes ─────────
+    if (task.goal) {
+      try {
+        const allGoalTasks = await Task.find({ goal: task.goal });
+        const totalTasks = allGoalTasks.length;
+        const completedTasks = allGoalTasks.filter(t => t.status === 'done').length;
+        const progressPercentage = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
+
+        await Goal.findByIdAndUpdate(task.goal, { progress: progressPercentage });
+      } catch (goalError) {
+        console.warn('Failed to update goal progress:', goalError.message);
       }
     }
 
