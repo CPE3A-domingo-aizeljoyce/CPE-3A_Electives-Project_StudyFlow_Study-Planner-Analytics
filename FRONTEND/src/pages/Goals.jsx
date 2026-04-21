@@ -3,6 +3,7 @@ import { useAppearance } from '../components/AppearanceProvider';
 import { Plus, Target, Trash2, X, CheckCircle, Circle, Pencil, Save } from 'lucide-react';
 import axios from 'axios'; 
 
+
 const SUBJECTS = ['General', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'History', 'Computer Science', 'Other...'];
 const GOAL_COLORS = ['#6366f1', '#22c55e', '#f97316', '#8b5cf6', '#06b6d4', '#fbbf24', '#ec4899'];
 
@@ -20,6 +21,9 @@ export function Goals() {
   const [editingId, setEditingId] = useState(null);
   const [editData, setEditData] = useState({ title: '', subject: '', color: '' });
   const [editCustomSubject, setEditCustomSubject] = useState('');
+
+  // Delete Modal State
+  const [goalToDelete, setGoalToDelete] = useState(null);
 
   useEffect(() => {
     fetchGoals();
@@ -64,16 +68,22 @@ export function Goals() {
     }
   };
 
-  const handleDeleteGoal = async (id) => {
-    if (!confirm("Delete this goal?")) return;
+  // --- DELETE FUNCTIONS (CUSTOM MODAL) ---
+  const confirmDelete = async () => {
+    if (!goalToDelete) return;
     try {
-      await axios.delete(`http://localhost:5000/api/goals/${id}`, {
+      await axios.delete(`http://localhost:5000/api/goals/${goalToDelete._id}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
-      setGoals(goals.filter(g => g._id !== id));
+      setGoals(goals.filter(g => g._id !== goalToDelete._id));
+      setGoalToDelete(null); 
     } catch (err) {
       console.error("Failed to delete goal", err);
     }
+  };
+
+  const cancelDelete = () => {
+    setGoalToDelete(null);
   };
 
   const toggleGoalStatus = async (goal) => {
@@ -83,6 +93,8 @@ export function Goals() {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setGoals(goals.map(g => g._id === goal._id ? res.data : g));
+
+      
     } catch (err) {
       console.error("Failed to update goal", err);
     }
@@ -187,14 +199,14 @@ export function Goals() {
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <input 
-  className={inputClass} 
-  style={{ background: colors.card2, border: `1px solid ${colors.border}`, color: colors.text }}
-  placeholder="What do you want to achieve?" 
-  value={newGoal.title} 
-  onChange={e => setNewGoal({...newGoal, title: e.target.value})} 
-  onKeyDown={e => { if (e.key === 'Enter') handleCreateGoal(); }} 
-  autoFocus 
-/>
+              className={inputClass} 
+              style={{ background: colors.card2, border: `1px solid ${colors.border}`, color: colors.text }}
+              placeholder="What do you want to achieve?" 
+              value={newGoal.title} 
+              onChange={e => setNewGoal({...newGoal, title: e.target.value})} 
+              onKeyDown={e => { if (e.key === 'Enter') handleCreateGoal(); }}
+              autoFocus 
+            />
             
             <div className="flex flex-col gap-2">
               <select 
@@ -204,16 +216,16 @@ export function Goals() {
                 {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
               {newGoal.subject === 'Other...' && (
-  <input 
-    className={inputClass} 
-    style={{ background: colors.card2, border: `1px solid ${colors.border}`, color: colors.text }}
-    placeholder="Type custom subject here..." 
-    value={customSubject} 
-    onChange={e => setCustomSubject(e.target.value)} 
-    onKeyDown={e => { if (e.key === 'Enter') handleCreateGoal(); }} 
-    autoFocus 
-  />
-)}
+                <input 
+                  className={inputClass} 
+                  style={{ background: colors.card2, border: `1px solid ${colors.border}`, color: colors.text }}
+                  placeholder="Type custom subject here..." 
+                  value={customSubject} 
+                  onChange={e => setCustomSubject(e.target.value)} 
+                  onKeyDown={e => { if (e.key === 'Enter') handleCreateGoal(); }}
+                  autoFocus 
+                />
+              )}
             </div>
           </div>
           
@@ -315,7 +327,7 @@ export function Goals() {
                         }
                       </button>
 
-                      <div className="flex-1 min-w-0 pr-12"> {/* pr-12 to make room for absolute buttons */}
+                      <div className="flex-1 min-w-0 pr-12">
                         <h3 className="text-sm truncate mb-1.5" style={{ fontWeight: 600, color: colors.text, textDecoration: isCompleted ? 'line-through' : 'none' }}>
                           {goal.title}
                         </h3>
@@ -329,11 +341,10 @@ export function Goals() {
                         <button onClick={() => startEditing(goal)} className="p-1.5 rounded-md hover:bg-gray-500/10" style={{ color: colors.textMuted }}>
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button onClick={() => handleDeleteGoal(goal._id)} className="p-1.5 rounded-md hover:bg-red-500/10 hover:text-red-400 transition-all" style={{ color: colors.textMuted }}>
+                        <button onClick={() => setGoalToDelete(goal)} className="p-1.5 rounded-md hover:bg-red-500/10 hover:text-red-400 transition-all" style={{ color: colors.textMuted }}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-
                     </div>
                   );
                 })}
@@ -342,6 +353,43 @@ export function Goals() {
           ))}
         </div>
       )}
+
+      {/* --- BAGO: CUSTOM DELETE MODAL --- */}
+      {goalToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)' }}
+          onClick={cancelDelete}>
+          
+          <div className="w-full max-w-sm rounded-3xl p-6 flex flex-col gap-4 text-center transform transition-all"
+            style={{ background: colors.card, border: `1px solid ${colors.border}`, boxShadow: '0 32px 64px rgba(0,0,0,0.5)' }}
+            onClick={e => e.stopPropagation()}>
+            
+            <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center" style={{ background: 'rgba(239, 68, 68, 0.1)' }}>
+              <Trash2 className="w-8 h-8" style={{ color: '#ef4444' }} />
+            </div>
+            
+            <div>
+              <h3 className="text-lg mb-1.5" style={{ fontWeight: 700, color: colors.text }}>Delete Goal?</h3>
+              <p className="text-sm leading-relaxed" style={{ color: colors.textMuted }}>
+                Are you sure you want to delete <strong style={{ color: colors.text }}>"{goalToDelete.title}"</strong>? This action cannot be undone.
+              </p>
+            </div>
+            
+            <div className="flex gap-3 mt-2">
+              <button onClick={cancelDelete} className="flex-1 px-4 py-2.5 rounded-xl text-sm transition-all hover:opacity-80"
+                style={{ background: colors.card2, color: colors.textSub, fontWeight: 600 }}>
+                Cancel
+              </button>
+              <button onClick={confirmDelete} className="flex-1 px-4 py-2.5 rounded-xl text-white text-sm transition-all hover:scale-105 active:scale-95"
+                style={{ background: '#ef4444', fontWeight: 600, boxShadow: '0 0 16px rgba(239, 68, 68, 0.3)' }}>
+                Delete
+              </button>
+            </div>
+            
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
