@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAppearance } from '../components/AppearanceProvider';
+import { fetchTasks } from '../api/taskApi';
 import {
   Brain, Coffee, Pencil, Play, Pause, RotateCcw, SkipForward,
   X, Plus, ChevronDown, Trash2, Save,
@@ -291,6 +292,7 @@ export function StudyTimer() {
   const loadInitialData = async () => {
     try {
       setLoading(true);
+      let currentSelectedTask = '';
 
       // 1. Restore active session with correct time calculation
       const activeRes = await fetchActiveSession();
@@ -314,7 +316,10 @@ export function StudyTimer() {
         setTimeLeft(remaining);
         setRunning(session.status === 'running');
         if (session.notes) setSessionNotes(session.notes);
-        if (session.title) setSelectedTask(session.title);
+        if (session.title) {
+          setSelectedTask(session.title);
+          currentSelectedTask = session.title;
+        }
       }
 
       // 2. Recent history
@@ -353,14 +358,42 @@ export function StudyTimer() {
         });
       }
 
-      // 5. Load saved tasks
-      const savedTasks = localStorage.getItem('studyTasks');
-      if (savedTasks) {
-        try {
-          const parsed = JSON.parse(savedTasks);
-          setTasks(parsed);
-          if (!selectedTask && parsed.length > 0) setSelectedTask(parsed[0]);
-        } catch { /* ignore */ }
+      // 5. Load DB Tasks + Local saved tasks
+      try {
+        const fetchedTasks = await fetchTasks();
+        const dbTasks = Array.isArray(fetchedTasks) ? fetchedTasks : (fetchedTasks?.data || []);
+        
+        // Filter out completed tasks and get titles
+        const activeDbTitles = dbTasks
+          .filter(t => t.status !== 'completed' && t.status !== 'done')
+          .map(t => t.title)
+          .filter(Boolean); // remove empty/undefined
+
+        const localTasks = [];
+        const savedLocal = localStorage.getItem('studyTasks');
+        if (savedLocal) {
+          try { localTasks.push(...JSON.parse(savedLocal)); } catch {}
+        }
+
+        // Combine and remove duplicates
+        const combinedTasks = [...new Set([...activeDbTitles, ...localTasks])];
+        setTasks(combinedTasks);
+        
+        // Only set default selection if we don't already have one from an active session
+        if (!currentSelectedTask && combinedTasks.length > 0) {
+          setSelectedTask(combinedTasks[0]);
+        }
+      } catch (err) {
+        console.error('Failed to load DB tasks:', err);
+        // Fallback to local
+        const savedLocal = localStorage.getItem('studyTasks');
+        if (savedLocal) {
+          try {
+            const parsed = JSON.parse(savedLocal);
+            setTasks(parsed);
+            if (!currentSelectedTask && parsed.length > 0) setSelectedTask(parsed[0]);
+          } catch {}
+        }
       }
 
     } catch (err) {
