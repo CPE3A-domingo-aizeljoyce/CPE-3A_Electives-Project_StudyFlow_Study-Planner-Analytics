@@ -201,8 +201,9 @@ export function Settings() {
                     <button onClick={() => setTimer({ ...timer, [t.key]: String(Math.max(1, Number(timer[t.key]) - 1)) })}
                       className="w-8 h-8 rounded-lg flex items-center justify-center"
                       style={{ background: colors.card, border: `1px solid ${colors.border}`, color: colors.textSub }}>−</button>
-                    <div className="flex-1 text-center">
-                      <span className="text-2xl" style={{ fontWeight: 700, color: t.color }}>{timer[t.key]}</span>
+                    <div className="flex-1 flex items-center justify-center">
+                      <input type="number" min="1" className="text-2xl bg-transparent border-none outline-none text-center" style={{ fontWeight: 700, color: t.color }}
+                        value={timer[t.key]} onChange={e => setTimer({ ...timer, [t.key]: e.target.value })} />
                       <span className="text-xs ml-1" style={{ color: colors.textMuted }}>min</span>
                     </div>
                     <button onClick={() => setTimer({ ...timer, [t.key]: String(Number(timer[t.key]) + 1) })}

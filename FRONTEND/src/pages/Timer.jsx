@@ -405,25 +405,34 @@ export function StudyTimer() {
 
   // ── Start ────────────────────────────────────────────────────────────────────
   const handleStartSession = async () => {
-    if (!selectedTask.trim()) { alert('Please select or add a task first.'); return; }
-    setRunning(true);
-    setTimeLeft(config.duration);
+    const taskName = selectedTask.trim() || `${config.label} Session`;
+    const targetDuration = config.duration;
+    
+    // OPTIMISTIC UPDATE: Start the timer instantly for a snappy UI
+    setTimeLeft(targetDuration);
+    setRunning(true); 
     playSound('start');
+    
     try {
-      const subject = selectedTask.split(' – ')[0] || selectedTask.split(' ')[0];
-      const res     = await startStudySession({ title: selectedTask, subject, mode, notes: '' });
-      setActiveSession(res.data);
-      if (mode === 'work') showTaskReminder();
-      else if (mode === 'long') showBreakReminder();
+      const subject = taskName.split(' – ')[0] || taskName.split(' ')[0];
+      const res = await startStudySession({ title: taskName, subject, mode, notes: '' });
+      
+      const sessionData = res?.data || res;
+      if (sessionData && sessionData._id) {
+        setActiveSession(sessionData);
+        
+        if (mode === 'work') showTaskReminder();
+        else if (mode === 'long') showBreakReminder();
+      }
     } catch (err) {
-      setRunning(false);
-      setTimeLeft(config.duration);
       console.error('Error starting session:', err);
       if (err?.response?.status === 400 && err?.response?.data?.existingSession) {
         setActiveSession(err.response.data.existingSession);
         setRunning(err.response.data.existingSession.status === 'running');
       } else {
-        alert('Failed to start session. Please try again.');
+        setRunning(false); 
+        setTimeLeft(targetDuration);
+        alert('Failed to connect to the backend. Please check your network or server.');
       }
     }
   };
@@ -431,28 +440,45 @@ export function StudyTimer() {
   // ── Pause ────────────────────────────────────────────────────────────────────
   const handlePauseSession = async () => {
     if (!activeSession) return;
+    
+    // OPTIMISTIC UPDATE
     setRunning(false);
     playSound('pause');
+    
     try {
       const res = await pauseStudySession(activeSession._id);
-      setActiveSession(res.data);
+      const sessionData = res?.data || res;
+      
+      if (sessionData && sessionData._id) {
+        setActiveSession(sessionData);
+      }
     } catch (err) {
-      setRunning(true);
       console.error('Error pausing session:', err);
+      // Revert if server fails
+      setRunning(true);
     }
   };
 
   // ── Resume ───────────────────────────────────────────────────────────────────
   const handleResumeSession = async () => {
     if (!activeSession) return;
+    
+    // OPTIMISTIC UPDATE
     setRunning(true);
     playSound('resume');
+    
     try {
       const res = await resumeStudySession(activeSession._id);
-      setActiveSession(res.data);
+      const sessionData = res?.data || res;
+      
+      if (sessionData && sessionData._id) {
+        setActiveSession(sessionData);
+      }
     } catch (err) {
-      setRunning(false);
       console.error('Error resuming session:', err);
+      // Revert if server fails
+      setRunning(false);
+      alert('Failed to resume. Your session might be out of sync with the server.');
     }
   };
 
@@ -637,29 +663,47 @@ export function StudyTimer() {
             </div>
           </div>
 
-          {/* Right: duration pills */}
+          {/* Right: editable duration controls */}
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl"
-              style={{ background: `rgba(${accent.rgb},0.1)`, border: `1px solid rgba(${accent.rgb},0.2)` }}>
-              <Brain className="w-3 h-3" style={{ color: accent.main }} />
-              <span className="text-xs" style={{ color: accent.main, fontWeight: 600 }}>
-                {timerSettings.focusDuration}m Focus
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl"
-              style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)' }}>
-              <Coffee className="w-3 h-3" style={{ color: '#22c55e' }} />
-              <span className="text-xs" style={{ color: '#22c55e', fontWeight: 600 }}>
-                {timerSettings.shortBreak}m Short
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl"
-              style={{ background: 'rgba(6,182,212,0.1)', border: '1px solid rgba(6,182,212,0.2)' }}>
-              <Coffee className="w-3 h-3" style={{ color: '#06b6d4' }} />
-              <span className="text-xs" style={{ color: '#06b6d4', fontWeight: 600 }}>
-                {timerSettings.longBreak}m Long
-              </span>
-            </div>
+            {[
+              { label: 'Focus', key: 'focusDuration', icon: Brain, color: accent.main, bgColor: `rgba(${accent.rgb},0.1)`, borderColor: `rgba(${accent.rgb},0.2)` },
+              { label: 'Short Break', key: 'shortBreak', icon: Coffee, color: '#22c55e', bgColor: 'rgba(34,197,94,0.1)', borderColor: 'rgba(34,197,94,0.2)' },
+              { label: 'Long Break', key: 'longBreak', icon: Coffee, color: '#06b6d4', bgColor: 'rgba(6,182,212,0.1)', borderColor: 'rgba(6,182,212,0.2)' },
+            ].map(t => {
+              const Icon = t.icon;
+              const saveSettings = (updated) => {
+                setTimerSettings(updated);
+                const payload = { profile: {}, timer: updated, notifs: {} };
+                localStorage.setItem(SETTINGS_KEY, JSON.stringify(payload));
+                window.dispatchEvent(new CustomEvent('studyTimerSettingsUpdated', { detail: payload }));
+                setModeConfig(buildModeConfig(accent.main, accentGlow, updated));
+              };
+              return (
+                <div key={t.key} className="flex items-center gap-1 px-2 py-1.5 rounded-lg" style={{ background: t.bgColor, border: `1px solid ${t.borderColor}` }}>
+                  <Icon className="w-3 h-3 flex-shrink-0" style={{ color: t.color }} />
+                  <button onClick={() => {
+                    const newVal = Math.max(1, Number(timerSettings[t.key]) - 1);
+                    saveSettings({ ...timerSettings, [t.key]: String(newVal) });
+                  }} className="w-5 h-5 rounded flex items-center justify-center hover:opacity-70" style={{ color: t.color, fontSize: '12px', fontWeight: 700 }}>−</button>
+                  <input type="number" min="1" max="120" className="w-8 bg-transparent border-none outline-none text-center text-xs" 
+                    style={{ color: t.color, fontWeight: 700 }}
+                    value={timerSettings[t.key]} 
+                    onChange={e => {
+                      const val = e.target.value;
+                      if (val === '') return;
+                      const num = Number(val);
+                      if (Number.isFinite(num) && num > 0) {
+                        saveSettings({ ...timerSettings, [t.key]: val });
+                      }
+                    }} />
+                  <button onClick={() => {
+                    const newVal = Number(timerSettings[t.key]) + 1;
+                    saveSettings({ ...timerSettings, [t.key]: String(newVal) });
+                  }} className="w-5 h-5 rounded flex items-center justify-center hover:opacity-70" style={{ color: t.color, fontSize: '12px', fontWeight: 700 }}>+</button>
+                  <span className="text-xs ml-1" style={{ color: t.color, fontWeight: 600, whiteSpace: 'nowrap' }}>min</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -771,7 +815,7 @@ export function StudyTimer() {
                   <button onClick={handleStartSession}
                     className="w-20 h-20 rounded-2xl flex items-center justify-center text-white hover:scale-105 active:scale-95"
                     style={{ background: `linear-gradient(135deg, ${config.color}, ${config.color}cc)`, boxShadow: `0 0 32px ${config.glow}, 0 8px 24px rgba(0,0,0,0.25)` }}
-                    disabled={loading || !selectedTask}>
+                    disabled={loading}>
                     <Play className="w-8 h-8 ml-1" />
                   </button>
                 ) : running ? (
