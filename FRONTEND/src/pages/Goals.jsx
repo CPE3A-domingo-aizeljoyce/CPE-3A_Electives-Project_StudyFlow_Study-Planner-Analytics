@@ -3,6 +3,7 @@ import { useAppearance } from '../components/AppearanceProvider';
 import { Plus, Target, Trash2, X, CheckCircle, Circle, Pencil, Save } from 'lucide-react';
 import axios from 'axios'; 
 
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const SUBJECTS = ['General', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'English', 'History', 'Computer Science', 'Other...'];
 const GOAL_COLORS = ['#6366f1', '#22c55e', '#f97316', '#8b5cf6', '#06b6d4', '#fbbf24', '#ec4899'];
@@ -32,7 +33,7 @@ export function Goals() {
   const fetchGoals = async () => {
     try {
       setLoading(true);
-      const res = await axios.get('http://localhost:5000/api/goals', {
+      const res = await axios.get(`${API_BASE}/api/goals`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setGoals(Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []));
@@ -52,7 +53,7 @@ export function Goals() {
       : newGoal.subject;
 
     try {
-      const res = await axios.post('http://localhost:5000/api/goals', {
+      const res = await axios.post(`${API_BASE}/api/goals`, {
         ...newGoal,
         subject: finalSubject
       }, {
@@ -72,7 +73,7 @@ export function Goals() {
   const confirmDelete = async () => {
     if (!goalToDelete) return;
     try {
-      await axios.delete(`http://localhost:5000/api/goals/${goalToDelete._id}`, {
+      await axios.delete(`${API_BASE}/api/goals/${goalToDelete._id}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setGoals(goals.filter(g => g._id !== goalToDelete._id));
@@ -89,7 +90,7 @@ export function Goals() {
   const toggleGoalStatus = async (goal) => {
     const updatedStatus = goal.status === 'completed' ? 'active' : 'completed';
     try {
-      const res = await axios.put(`http://localhost:5000/api/goals/${goal._id}`, { status: updatedStatus }, {
+      const res = await axios.put(`${API_BASE}/api/goals/${goal._id}`, { status: updatedStatus }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setGoals(goals.map(g => g._id === goal._id ? res.data : g));
@@ -124,7 +125,7 @@ export function Goals() {
       : editData.subject;
 
     try {
-      const res = await axios.put(`http://localhost:5000/api/goals/${id}`, {
+      const res = await axios.put(`${API_BASE}/api/goals/${id}`, {
         title: editData.title,
         subject: finalSubject,
         color: editData.color
