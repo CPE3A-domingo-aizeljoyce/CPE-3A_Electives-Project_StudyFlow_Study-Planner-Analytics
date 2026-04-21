@@ -14,6 +14,7 @@ import { Goals }         from './pages/Goals';
 import { Notes }         from './pages/Notes';
 import { Achievements }  from './pages/Achievements';
 import { Settings }      from './pages/Settings';
+import { AboutUs } from './pages/AboutUs';
 
 function ProtectedRoute() {
   const token = localStorage.getItem('token');
@@ -26,6 +27,7 @@ export const router = createHashRouter([
     Component: Root,
     children: [
       { path: '/',               Component: Landing      },
+      { path: '/about',          Component: AboutUs      },
       { path: '/login',          Component: Login        },
       { path: '/auth/callback',  Component: AuthCallback },
       { path: '/reset-password', Component: ResetPassword },   // ← ADDED

@@ -28,25 +28,30 @@ export function Landing() {
 
       {/* Nav */}
       <nav 
-  className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-5"
-  style={{ background: 'rgba(13,17,23,0.85)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(26,37,64,0.6)' }}
->
-  <div className="flex items-center gap-2.5">
-    <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-      style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.45)' }}>
-      <Brain className="w-5 h-5 text-white" />
-    </div>
-    <span className="text-white text-base" style={{ fontWeight: 700, letterSpacing: '-0.3px' }}>StudyFlow</span>
-  </div>
+        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-4 py-3 sm:px-6 sm:py-5"
+        style={{ background: 'rgba(13,17,23,0.85)', backdropFilter: 'blur(16px)', borderBottom: '1px solid rgba(26,37,64,0.6)' }}
+      >
+
+        
+        <div className="flex items-center gap-2.5">
+          <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.45)' }}>
+            <Brain className="w-5 h-5 text-white" />
+          </div>
+          <span className="text-white text-base" style={{ fontWeight: 700, letterSpacing: '-0.3px' }}>StudyFlow</span>
+        </div>
 
         <div className="hidden md:flex items-center gap-8">
-          {['Features', 'How it works'].map(item => (
-            <a key={item} href={`#${item.toLowerCase().replace(/ /g, '-')}`}
-              className="text-slate-400 text-sm hover:text-slate-200 transition-colors" style={{ fontWeight: 500 }}>
-              {item}
-            </a>
-          ))}
-        </div>
+  <a href="#features" className="text-slate-400 text-sm hover:text-slate-200 transition-colors" style={{ fontWeight: 500 }}>
+    Features
+  </a>
+  <a href="#how-it-works" className="text-slate-400 text-sm hover:text-slate-200 transition-colors" style={{ fontWeight: 500 }}>
+    How it works
+  </a>
+  <button onClick={() => navigate('/about')} className="text-slate-400 text-sm hover:text-slate-200 transition-colors" style={{ fontWeight: 500 }}>
+    About Us
+  </button>
+</div>
 
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/login')} className="px-4 py-2 rounded-xl text-sm text-slate-300 hover:text-white transition-colors" style={{ fontWeight: 500 }}>
@@ -130,8 +135,8 @@ export function Landing() {
         </div>
       </section>
 
-      {/* Features */}
-      <section id="features" className="px-6 md:px-12 mb-24">
+      {/* Features (Restored Original Layout) */}
+      <section id="features" className="px-6 md:px-12 mb-24 pt-20">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-12">
             <div className="text-xs mb-3" style={{ color: '#818cf8', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Everything you need</div>
@@ -151,8 +156,8 @@ export function Landing() {
         </div>
       </section>
 
-      {/* How it works */}
-      <section id="how-it-works" className="px-6 md:px-12 mb-24">
+      {/* How it works (Restored Original Layout) */}
+     <section id="how-it-works" className="px-6 md:px-12 mb-24 pt-20">
         <div className="max-w-3xl mx-auto text-center">
           <div className="text-xs mb-3" style={{ color: '#818cf8', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Simple to start</div>
           <h2 className="text-3xl md:text-4xl text-white mb-12" style={{ fontWeight: 800, letterSpacing: '-0.8px' }}>Up and running in 60 seconds</h2>
