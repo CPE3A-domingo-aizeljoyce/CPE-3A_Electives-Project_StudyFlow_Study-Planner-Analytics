@@ -1040,23 +1040,11 @@ export function StudyTimer() {
                     <span className="text-xs shrink-0" style={{ color: colors.textMuted }}>{h.duration}</span>
                     <span className="text-xs shrink-0" style={{ color: colors.textMuted }}>{h.time}</span>
                     <button
-                      onClick={async () => {
-                        if (!confirm('Delete this session?')) return;
-                        try {
-                          await deleteStudySession(h.id);
-                          setHistory(prev => prev.filter(item => item.id !== h.id));
-                          if (h.mode === 'work') {
-                            setTotalStats(prev => ({
-                              ...prev,
-                              totalSessions: Math.max(0, prev.totalSessions - 1),
-                            }));
-                          }
-                        } catch { alert('Failed to delete session.'); }
-                      }}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-400"
-                      style={{ color: colors.textMuted }}>
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+  onClick={() => setSessionToDelete(h)}
+  className="opacity-0 group-hover:opacity-100 transition-opacity hover:text-red-400"
+  style={{ color: colors.textMuted }}>
+  <Trash2 className="w-3 h-3" />
+</button>
                   </div>
                 ))}
                 {history.length === 0 && (
