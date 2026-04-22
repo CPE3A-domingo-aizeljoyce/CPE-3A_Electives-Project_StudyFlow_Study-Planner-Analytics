@@ -1,4 +1,4 @@
-const UserSettings = require('../models/UserSettings');
+import UserSettings from '../models/UserSettings.js';
 
 const defaultProfile = {
   name: 'Moran', email: 'secret@gmail.com', username: 'mrnski',
@@ -18,9 +18,9 @@ const defaultTimer = {
   soundEnabled: true, notifyOnComplete: true,
 };
 
-exports.getSettings = async (req, res) => {
+export const getSettings = async (req, res) => {
   try {
-    const settings = await UserSettings.findOne({ userId: req.user.id });
+    const settings = await UserSettings.findOne({ userId: req.user._id });
     if (!settings) {
       return res.json({ profile: defaultProfile, notifs: defaultNotifs, timer: defaultTimer });
     }
@@ -35,15 +35,19 @@ exports.getSettings = async (req, res) => {
   }
 };
 
-exports.updateSettings = async (req, res) => {
+export const updateSettings = async (req, res) => {
   try {
     const { profile, notifs, timer } = req.body;
-    await UserSettings.findOneAndUpdate(
-      { userId: req.user.id },
-      { profile, notifs, timer },
+    const updatedSettings = await UserSettings.findOneAndUpdate(
+      { userId: req.user._id },
+      {
+        profile: { ...defaultProfile, ...profile },
+        notifs: { ...defaultNotifs, ...notifs },
+        timer: { ...defaultTimer, ...timer },
+      },
       { upsert: true, new: true }
     );
-    res.json({ message: 'Settings updated successfully' });
+    res.json({ message: 'Settings updated successfully', data: updatedSettings });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Server error' });

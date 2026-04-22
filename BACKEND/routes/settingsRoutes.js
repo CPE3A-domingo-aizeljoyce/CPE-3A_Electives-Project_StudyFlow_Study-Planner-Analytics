@@ -9,12 +9,16 @@
 // - Model: UserSettings.js
 // - Middleware: authMiddleware.js
 
-const express = require('express');
+import express from 'express';
+import { getSettings, updateSettings } from '../controllers/settingsController.js';
+import { protect } from '../middleware/authMiddleware.js';
+
 const router = express.Router();
-const { getSettings, updateSettings } = require('../controllers/settingsController');
-const auth = require('../middleware/authMiddleware');
 
-router.get('/', auth, getSettings);
-router.put('/', auth, updateSettings);
+// All routes require authentication
+router.use(protect);
 
-module.exports = router;
+router.get('/', getSettings);
+router.put('/', updateSettings);
+
+export default router;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { getSettings, updateSettings } from '../api/settingsApi';
 import { useAppearance, ACCENT_PALETTE } from '../components/AppearanceProvider';
 import { User, Clock, Palette, Shield, ChevronRight, Check, Sun, Moon } from 'lucide-react';
 
@@ -15,12 +15,12 @@ const LS_SETTINGS_KEY = 'sf_settings';
 const defaultProfile = {
   name: 'studyflow', email: 'secret@gmail.com', username: 'mrnski',
   bio: 'CS student passionate about math and physics. Aiming for a perfect GPA!',
-  timezone: 'America/New_York', studyGoal: '4',
+  timezone: 'America/New_York', studyGoal: 4,
 };
 
 const defaultTimer = {
-  focusDuration: '25', shortBreak: '5', longBreak: '15',
-  sessionsBeforeLong: '4', autoStartBreaks: true, autoStartSessions: false,
+  focusDuration: 25, shortBreak: 5, longBreak: 15,
+  sessionsBeforeLong: 4, autoStartBreaks: true, autoStartSessions: false,
   soundEnabled: true, notifyOnComplete: true,
 };
 
@@ -84,45 +84,96 @@ export function Settings() {
 
   const [savedSettings, setSavedSettings] = useState(null);
   const [profile, setProfile] = useState(defaultProfile);
-  const [timer,   setTimer]   = useState(defaultTimer);
+  // Store timer values as strings for input compatibility
+  const [timer,   setTimer]   = useState({
+    focusDuration: String(defaultTimer.focusDuration),
+    shortBreak: String(defaultTimer.shortBreak),
+    longBreak: String(defaultTimer.longBreak),
+    sessionsBeforeLong: String(defaultTimer.sessionsBeforeLong),
+    autoStartBreaks: defaultTimer.autoStartBreaks,
+    autoStartSessions: defaultTimer.autoStartSessions,
+    soundEnabled: defaultTimer.soundEnabled,
+    notifyOnComplete: defaultTimer.notifyOnComplete,
+  });
   const [saved,   setSaved]   = useState(false);
+  const [error,   setError]   = useState('');
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const local = loadSavedSettings();
-    if (local) {
-      setSavedSettings(local);
-      setProfile(local.profile || defaultProfile);
-      setTimer(local.timer   || defaultTimer);
-    } else {
-      axios.get('/api/settings')
-        .then(res => {
-          const data = res.data;
-          const payload = {
-            profile: data.profile || defaultProfile,
-            timer:   data.timer   || defaultTimer,
-          };
-          setSavedSettings(payload);
-          setProfile(payload.profile);
-          setTimer(payload.timer);
-          saveSettingsLocally(payload);
-        })
-        .catch(err => {
-          console.error('Failed to load settings:', err);
-          setSavedSettings({ profile: defaultProfile, timer: defaultTimer });
-        });
-    }
+    const loadSettings = async () => {
+      try {
+        setLoading(true);
+        const data = await getSettings();
+        const loadedProfile = data.profile || defaultProfile;
+        const loadedTimer = data.timer || defaultTimer;
+        
+        const payload = {
+          profile: loadedProfile,
+          timer: {
+            focusDuration: String(loadedTimer.focusDuration),
+            shortBreak: String(loadedTimer.shortBreak),
+            longBreak: String(loadedTimer.longBreak),
+            sessionsBeforeLong: String(loadedTimer.sessionsBeforeLong),
+            autoStartBreaks: loadedTimer.autoStartBreaks,
+            autoStartSessions: loadedTimer.autoStartSessions,
+            soundEnabled: loadedTimer.soundEnabled,
+            notifyOnComplete: loadedTimer.notifyOnComplete,
+          },
+        };
+        setSavedSettings(payload);
+        setProfile(payload.profile);
+        setTimer(payload.timer);
+        saveSettingsLocally(payload);
+        setError('');
+      } catch (err) {
+        console.error('Failed to load settings:', err);
+        const defaultPayload = {
+          profile: defaultProfile,
+          timer: {
+            focusDuration: String(defaultTimer.focusDuration),
+            shortBreak: String(defaultTimer.shortBreak),
+            longBreak: String(defaultTimer.longBreak),
+            sessionsBeforeLong: String(defaultTimer.sessionsBeforeLong),
+            autoStartBreaks: defaultTimer.autoStartBreaks,
+            autoStartSessions: defaultTimer.autoStartSessions,
+            soundEnabled: defaultTimer.soundEnabled,
+            notifyOnComplete: defaultTimer.notifyOnComplete,
+          },
+        };
+        setSavedSettings(defaultPayload);
+        setProfile(defaultProfile);
+        setTimer(defaultPayload.timer);
+        setError('Failed to load settings. Using defaults.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSettings();
   }, []);
 
   const handleSave = async () => {
-    const payload = { profile, timer };
-    saveSettingsLocally(payload);
     try {
-      await axios.put('/api/settings', payload);
+      setError('');
+      const timerPayload = {
+        ...timer,
+        focusDuration: Number(timer.focusDuration),
+        shortBreak: Number(timer.shortBreak),
+        longBreak: Number(timer.longBreak),
+        sessionsBeforeLong: Number(timer.sessionsBeforeLong),
+      };
+      const profilePayload = {
+        ...profile,
+        studyGoal: Number(profile.studyGoal),
+      };
+      const payload = { profile: profilePayload, timer: timerPayload };
+      await updateSettings(payload);
+      saveSettingsLocally(payload);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
     } catch (err) {
       console.error('Failed to save settings:', err);
+      setError('Failed to save settings. Please try again.');
     }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
   };
 
   const inputStyle = {
@@ -425,14 +476,22 @@ export function Settings() {
             {renderSection()}
           </div>
           {activeSection !== 'appearance' && activeSection !== 'privacy' && (
-            <div className="flex items-center gap-3">
-              <button onClick={handleSave}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm hover:opacity-90"
-                style={{ background: `linear-gradient(135deg, ${accent.main}, ${accent.light})`, fontWeight: 600, boxShadow: `0 0 20px rgba(${accent.rgb},0.3)` }}>
-                {saved && <Check className="w-4 h-4" />}
-                {saved ? 'Saved!' : 'Save Changes'}
-              </button>
-              <p className="text-xs" style={{ color: colors.textMuted }}>Changes are saved locally and will reload after refresh.</p>
+            <div className="flex flex-col gap-3">
+              {error && (
+                <div className="px-4 py-2.5 rounded-xl text-sm"
+                  style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#ef4444' }}>
+                  {error}
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <button onClick={handleSave} disabled={loading}
+                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm hover:opacity-90 disabled:opacity-50"
+                  style={{ background: `linear-gradient(135deg, ${accent.main}, ${accent.light})`, fontWeight: 600, boxShadow: `0 0 20px rgba(${accent.rgb},0.3)` }}>
+                  {saved && <Check className="w-4 h-4" />}
+                  {loading ? 'Loading...' : saved ? 'Saved!' : 'Save Changes'}
+                </button>
+                <p className="text-xs" style={{ color: colors.textMuted }}>Changes are synced to MongoDB.</p>
+              </div>
             </div>
           )}
         </div>
