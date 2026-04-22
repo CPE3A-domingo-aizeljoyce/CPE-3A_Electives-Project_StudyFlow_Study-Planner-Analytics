@@ -67,7 +67,6 @@ export const updateStatusTask = async (id, status) => {
   return handleResponse(res);
 };
 
-// POST /api/tasks/:id/sync-calendar  ← NEW
 export const syncTaskToCalendar = async (id) => {
   const res = await fetch(`${BASE}/api/tasks/${id}/sync-calendar`, {
     method:  'POST',
