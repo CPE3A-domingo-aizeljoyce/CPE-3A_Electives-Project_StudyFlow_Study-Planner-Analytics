@@ -9,14 +9,14 @@ export const sendVerificationEmail = async ({ name, email, verificationUrl, goog
   await getResend().emails.send({
     from:    FROM(),
     to:      email,
-    subject: 'Verify your StudyFlow account',
+    subject: 'Verify your AcadFlu account',
     html: `
       <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;background:#0d1117;color:#e2e8f0;padding:40px 32px;border-radius:16px;">
 
         <!-- Header -->
         <div style="text-align:center;margin-bottom:28px;">
           <div style="width:52px;height:52px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:14px;display:inline-flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:14px;">⚡</div>
-          <h1 style="color:#fff;font-size:22px;margin:0;font-weight:800;">Welcome to StudyFlow, ${name}!</h1>
+          <h1 style="color:#fff;font-size:22px;margin:0;font-weight:800;">Welcome to AcadFlu, ${name}!</h1>
         </div>
 
         <!-- Body -->
@@ -35,7 +35,7 @@ export const sendVerificationEmail = async ({ name, email, verificationUrl, goog
         <!-- Expiry note -->
         <p style="color:#475569;font-size:12px;text-align:center;line-height:1.6;margin-bottom:${googleAuthUrl ? '28px' : '0'};">
           This link expires in <strong>24 hours</strong>.<br/>
-          If you didn't create a StudyFlow account, you can safely ignore this email.
+          If you didn't create a AcadFlu account, you can safely ignore this email.
         </p>
 
         ${googleAuthUrl ? `
@@ -51,7 +51,7 @@ export const sendVerificationEmail = async ({ name, email, verificationUrl, goog
 
           <p style="color:#94a3b8;font-size:13px;line-height:1.7;margin:0 0 18px 0;">
             Since you used a <strong style="color:#cbd5e1;">Gmail address</strong>, you can also connect your
-            <strong style="color:#cbd5e1;">Google Calendar</strong> to StudyFlow — so your study sessions,
+            <strong style="color:#cbd5e1;">Google Calendar</strong> to AcadFlu — so your study sessions,
             goals, and tasks sync automatically. No extra setup needed.
           </p>
 
@@ -85,7 +85,7 @@ export const sendPasswordResetEmail = async ({ name, email, resetUrl }) => {
   await getResend().emails.send({
     from:    FROM(),
     to:      email,
-    subject: 'Reset your StudyFlow password',
+    subject: 'Reset your AcadFlu password',
     html: `
       <div style="font-family:Inter,sans-serif;max-width:560px;margin:0 auto;background:#0d1117;color:#e2e8f0;padding:40px 32px;border-radius:16px;">
         <div style="text-align:center;margin-bottom:28px;">
@@ -94,7 +94,7 @@ export const sendPasswordResetEmail = async ({ name, email, resetUrl }) => {
         </div>
         <p style="color:#94a3b8;line-height:1.7;margin-bottom:8px;">Hi ${name},</p>
         <p style="color:#94a3b8;line-height:1.7;margin-bottom:28px;">
-          We received a request to reset your StudyFlow password. Click the button below to set a new one.
+          We received a request to reset your AcadFlu password. Click the button below to set a new one.
         </p>
         <div style="text-align:center;margin-bottom:28px;">
           <a href="${resetUrl}"

@@ -13,7 +13,7 @@ const sections = [
 const LS_SETTINGS_KEY = 'sf_settings';
 
 const defaultProfile = {
-  name: 'studyflow', email: 'secret@gmail.com', username: 'mrnski',
+  name: 'AcadFlu', email: 'secret@gmail.com', username: 'mrnski',
   bio: 'CS student passionate about math and physics. Aiming for a perfect GPA!',
   timezone: 'America/New_York', studyGoal: '4',
 };

@@ -210,7 +210,7 @@ export function Dashboard() {
       <div style={{ marginBottom: compactMode ? '0.75rem' : '1rem' }}>
         <div className="flex items-center justify-between mb-1">
           <h1 style={{ fontWeight: 700, fontSize: 'clamp(1rem, 4vw, 1.25rem)', letterSpacing: '-0.4px', lineHeight: 1.2, color: colors.text }}>
-            Welcome back to StudyFlow
+            Welcome back to AcadFlu
           </h1>
           <div className="hidden sm:flex items-center gap-3">
             {showStreak && (

@@ -35,7 +35,7 @@ app.use('/api/study-timer',  timerRoutes);
 app.use('/api/achievements', achievementsRoutes);
 app.use('/api/notes',        noteRoutes);
 
-app.get('/', (req, res) => res.send('StudyFlow API is running ✅'));
+app.get('/', (req, res) => res.send('AcadFlu API is running ✅'));
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 5000;

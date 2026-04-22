@@ -84,7 +84,7 @@ function buildEventResource(task) {
     // Completed tasks show as "free" (strikethrough) in Calendar
     transparency: task.done ? 'transparent' : 'opaque',
     source: {
-      title: 'StudyFlow',
+      title: 'AcadFlu',
       url:   process.env.CLIENT_URL || 'http://localhost:5173',
     },
   };
