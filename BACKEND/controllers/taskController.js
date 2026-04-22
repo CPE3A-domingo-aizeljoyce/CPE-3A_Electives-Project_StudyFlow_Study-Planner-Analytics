@@ -6,11 +6,10 @@ import { checkAndAwardAchievements } from '../utils/achievementService.js';
 
 const calendar = google.calendar('v3');
 
-// ─── Google Calendar Helpers ──────────────────────────────────────────────────
+const SYNC_DEBOUNCE_MS = 5 * 1000;
 
 async function getOAuth2Client(userId) {
   const user = await User.findById(userId);
-
   if (!user || !user.googleRefreshToken) {
     throw new Error('User not connected to Google Calendar');
   }
@@ -43,8 +42,207 @@ async function getOAuth2Client(userId) {
 }
 
 function getCalendarColorFromPriority(priority) {
-  const colorMap = { high: '11', medium: '5', low: '8' };
-  return colorMap[priority] || '8';
+  return { high: '11', medium: '5', low: '8' }[priority] || '8';
+}
+
+function parseGCalDateTime(dateTimeStr) {
+  if (!dateTimeStr) return { date: null, time: null };
+  const dt = new Date(dateTimeStr);
+  if (isNaN(dt.getTime())) return { date: null, time: null };
+
+  const m = new Date(dt.getTime() + 8 * 60 * 60 * 1000);
+
+  const date = [
+    m.getUTCFullYear(),
+    String(m.getUTCMonth() + 1).padStart(2, '0'),
+    String(m.getUTCDate()).padStart(2, '0'),
+  ].join('-');
+
+  const time = [
+    String(m.getUTCHours()).padStart(2, '0'),
+    String(m.getUTCMinutes()).padStart(2, '0'),
+  ].join(':');
+
+  return { date, time };
+}
+
+// Reads the Subject: and Priority: lines from the GCal description.
+// GCal description format written by the website:
+//   Subject: Mathematics
+//   Priority: high
+//
+// If the user edits these lines in GCal, the new values sync back.
+// If a line is missing or Priority is not high/medium/low, it is skipped safely.
+function parseGCalMetadata(raw) {
+  if (!raw) return { subject: null, priority: null };
+  const lines  = raw.split('\n');
+  let subject  = null;
+  let priority = null;
+  for (const line of lines) {
+    if (line.startsWith('Subject:'))
+      subject  = line.replace('Subject:', '').trim() || null;
+    if (line.startsWith('Priority:'))
+      priority = line.replace('Priority:', '').trim().toLowerCase() || null;
+  }
+  if (priority && !['high', 'medium', 'low'].includes(priority)) priority = null;
+  return { subject, priority };
+}
+
+async function syncCalendarToDatabase(userId, { forceSync = false } = {}) {
+  const user = await User.findById(userId);
+  if (!user || !user.googleRefreshToken) {
+    return { deleted: 0, updated: 0, skipped: true };
+  }
+
+  const now = new Date();
+
+  if (!forceSync && user.calendarLastSynced) {
+    const elapsed = now - new Date(user.calendarLastSynced);
+    if (elapsed < SYNC_DEBOUNCE_MS) {
+      console.log(
+        `[CalendarSync] Debounced — ${Math.round(elapsed / 1000)}s since last sync ` +
+        `(limit: ${SYNC_DEBOUNCE_MS / 1000}s)`
+      );
+      return { deleted: 0, updated: 0, skipped: true };
+    }
+  }
+
+  user.calendarLastSynced = now;
+  await user.save();
+
+  const syncedTasks = await Task.find({
+    user:          userId,
+    googleEventId: { $ne: null },
+  });
+
+  if (syncedTasks.length === 0) {
+    console.log(`[CalendarSync] No synced tasks for user ${userId}`);
+    return { deleted: 0, updated: 0 };
+  }
+
+  console.log(`[CalendarSync] Checking ${syncedTasks.length} synced task(s) against Google Calendar...`);
+
+  let auth;
+  try {
+    auth = await getOAuth2Client(userId);
+  } catch (authErr) {
+    console.warn(`[CalendarSync] Auth error: ${authErr.message}`);
+    return { deleted: 0, updated: 0, authError: true };
+  }
+
+  const fetches = syncedTasks.map(task =>
+    calendar.events.get({
+      auth,
+      calendarId: 'primary',
+      eventId:    task.googleEventId,
+      fields:     'id,status,summary,description,start,end',
+    }).catch(err => ({
+      __error:     err,
+      __taskId:    task._id,
+      __taskTitle: task.title,
+      __eventId:   task.googleEventId,
+    }))
+  );
+
+  const results = await Promise.all(fetches);
+
+  let deleted = 0;
+  let updated = 0;
+
+  for (let i = 0; i < syncedTasks.length; i++) {
+    const task   = syncedTasks[i];
+    const result = results[i];
+
+    if (result.__error) {
+      const err    = result.__error;
+      const status = err.code || err.status || err?.response?.status || 0;
+
+      if (status === 404 || status === 410) {
+        console.log(
+          `[CalendarSync] ✗ Event not found (${status}) — ` +
+          `deleting task "${task.title}" (googleEventId: ${task.googleEventId})`
+        );
+        await Task.findByIdAndDelete(task._id);
+        deleted++;
+      } else {
+        console.warn(
+          `[CalendarSync] ⚠ Could not fetch event ${task.googleEventId}: ` +
+          `${err.message} (status ${status}) — skipping`
+        );
+      }
+      continue;
+    }
+
+    const event = result.data;
+
+    if (event.status === 'cancelled') {
+      console.log(
+        `[CalendarSync] ✗ Event cancelled — ` +
+        `deleting task "${task.title}" (googleEventId: ${task.googleEventId})`
+      );
+      await Task.findByIdAndDelete(task._id);
+      deleted++;
+      continue;
+    }
+
+    const changes = {};
+
+    // Title
+    if (event.summary && event.summary.trim() !== task.title.trim()) {
+      console.log(`[CalendarSync] ✏ Title: "${task.title}" → "${event.summary.trim()}"`);
+      changes.title = event.summary.trim();
+    }
+
+    // Subject and Priority — parsed from the description metadata lines
+    const { subject: gSubject, priority: gPriority } = parseGCalMetadata(event.description);
+
+    if (gSubject && gSubject !== task.subject) {
+      console.log(`[CalendarSync] ✏ Subject: "${task.subject}" → "${gSubject}"`);
+      changes.subject = gSubject;
+    }
+
+    if (gPriority && gPriority !== task.priority) {
+      console.log(`[CalendarSync] ✏ Priority: "${task.priority}" → "${gPriority}"`);
+      changes.priority = gPriority;
+    }
+
+    // Date + start time
+    if (event.start?.dateTime) {
+      const { date: gDate, time: gStart } = parseGCalDateTime(event.start.dateTime);
+      const taskDateStr = task.date.toISOString().split('T')[0];
+
+      if (gDate && gDate !== taskDateStr) {
+        console.log(`[CalendarSync] ✏ Date: ${taskDateStr} → ${gDate}`);
+        changes.date = new Date(gDate);
+      }
+      if (gStart && gStart !== task.startTime) {
+        console.log(`[CalendarSync] ✏ Start: ${task.startTime} → ${gStart}`);
+        changes.startTime = gStart;
+      }
+    }
+
+    // End time
+    if (event.end?.dateTime) {
+      const { time: gEnd } = parseGCalDateTime(event.end.dateTime);
+      if (gEnd && gEnd !== task.endTime) {
+        console.log(`[CalendarSync] ✏ End: ${task.endTime} → ${gEnd}`);
+        changes.endTime = gEnd;
+      }
+    }
+
+    if (Object.keys(changes).length > 0) {
+      changes.lastCalendarSyncAt = now;
+      await Task.findByIdAndUpdate(task._id, changes);
+      updated++;
+      console.log(
+        `[CalendarSync] ✓ Updated task "${task.title}" — fields: ` +
+        Object.keys(changes).filter(k => k !== 'lastCalendarSyncAt').join(', ')
+      );
+    }
+  }
+
+  console.log(`[CalendarSync] ✅ Complete — ${deleted} deleted, ${updated} updated`);
+  return { deleted, updated };
 }
 
 async function syncTaskToCalendarInternal(userId, task) {
@@ -54,7 +252,7 @@ async function syncTaskToCalendarInternal(userId, task) {
 
     const eventData = {
       summary:     task.title,
-      description: `Subject: ${task.subject}\nPriority: ${task.priority}${task.description ? '\n' + task.description : ''}`,
+      description: `Subject: ${task.subject}\nPriority: ${task.priority}`,
       start: {
         dateTime: `${dateStr}T${task.startTime}:00`,
         timeZone: 'Asia/Manila',
@@ -68,7 +266,6 @@ async function syncTaskToCalendarInternal(userId, task) {
     };
 
     let event;
-
     if (task.googleEventId) {
       event = await calendar.events.update({
         auth,
@@ -86,14 +283,14 @@ async function syncTaskToCalendarInternal(userId, task) {
 
     return event.data.id;
   } catch (error) {
-    console.error('Error syncing task to calendar:', error);
+    console.error('[Calendar] Error syncing task to calendar:', error.message);
     throw new Error(`Failed to sync task to calendar: ${error.message}`);
   }
 }
 
 async function removeTaskFromCalendarInternal(userId, googleEventId) {
   try {
-    if (!googleEventId) return;
+    if (!googleEventId) return true;
     const auth = await getOAuth2Client(userId);
     await calendar.events.delete({
       auth,
@@ -102,9 +299,10 @@ async function removeTaskFromCalendarInternal(userId, googleEventId) {
     });
     return true;
   } catch (error) {
-    // 410 Gone = already deleted on Google's side — treat as success
-    if (error.code === 410 || error.status === 410) return true;
-    console.error('Error removing task from calendar:', error);
+    if (error.code === 404 || error.code === 410 || error.status === 404 || error.status === 410) {
+      return true;
+    }
+    console.error('[Calendar] Error removing event from calendar:', error.message);
     return false;
   }
 }
@@ -127,14 +325,36 @@ async function markTaskDoneInCalendarInternal(userId, googleEventId, isDone) {
     });
     return true;
   } catch (error) {
-    console.error('Error marking task done in calendar:', error);
+    console.error('[Calendar] Error updating event transparency:', error.message);
     return false;
   }
 }
 
-// ─── Task CRUD ────────────────────────────────────────────────────────────────
+export const getTasks = async (req, res) => {
+  try {
+    let syncResult = { deleted: 0, updated: 0 };
 
-// CREATE TASK
+    if (req.user.googleRefreshToken) {
+      try {
+        syncResult = await syncCalendarToDatabase(req.user.id);
+      } catch (syncErr) {
+        console.warn('[CalendarSync] Non-fatal error in getTasks:', syncErr.message);
+      }
+    }
+
+    const tasks = await Task.find({ user: req.user.id }).sort({ date: 1, startTime: 1 });
+
+    res.set('X-Calendar-Sync', JSON.stringify({
+      deleted: syncResult.deleted || 0,
+      updated: syncResult.updated || 0,
+    }));
+
+    res.status(200).json(tasks);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
 export const createTask = async (req, res) => {
   try {
     const { title, subject, date, startTime, endTime, priority, description, syncToCalendar } = req.body;
@@ -163,9 +383,9 @@ export const createTask = async (req, res) => {
 
     if (syncToCalendar && req.user.googleRefreshToken) {
       try {
-        const googleEventId = await syncTaskToCalendarInternal(req.user.id, task);
-        task.googleEventId   = googleEventId;
-        task.calendarSynced  = true;
+        const googleEventId     = await syncTaskToCalendarInternal(req.user.id, task);
+        task.googleEventId      = googleEventId;
+        task.calendarSynced     = true;
         task.lastCalendarSyncAt = new Date();
         await task.save();
         console.log(`[Tasks] Calendar sync SUCCESS — eventId: ${googleEventId}`);
@@ -182,17 +402,6 @@ export const createTask = async (req, res) => {
   }
 };
 
-// GET ALL TASKS
-export const getTasks = async (req, res) => {
-  try {
-    const tasks = await Task.find({ user: req.user.id }).sort({ date: 1, startTime: 1 });
-    res.status(200).json(tasks);
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
-};
-
-// GET SINGLE TASK
 export const getTask = async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
@@ -206,7 +415,6 @@ export const getTask = async (req, res) => {
   }
 };
 
-// UPDATE TASK
 export const updateTask = async (req, res) => {
   try {
     const { id } = req.params;
@@ -224,24 +432,24 @@ export const updateTask = async (req, res) => {
         task[key] = key === 'date' ? new Date(fields[key]) : fields[key];
     }
 
-    // Sync updated fields to calendar if task is already synced
     if (req.user.googleRefreshToken) {
       const shouldSync = syncToCalendar === true || (syncToCalendar === undefined && task.calendarSynced);
       if (shouldSync) {
         try {
-          const googleEventId = await syncTaskToCalendarInternal(req.user.id, task);
+          const googleEventId     = await syncTaskToCalendarInternal(req.user.id, task);
           task.googleEventId      = googleEventId;
           task.calendarSynced     = true;
           task.lastCalendarSyncAt = new Date();
+          console.log(`[Tasks] Updated event in Calendar — eventId: ${googleEventId}`);
         } catch (calErr) {
-          console.warn(`[Tasks] Calendar update failed on edit: ${calErr.message}`);
+          console.warn(`[Tasks] Calendar update failed: ${calErr.message}`);
         }
       } else if (syncToCalendar === false && task.googleEventId) {
-        // User explicitly unsynced — remove from Calendar
         try {
           await removeTaskFromCalendarInternal(req.user.id, task.googleEventId);
           task.googleEventId  = null;
           task.calendarSynced = false;
+          console.log(`[Tasks] Removed event from Calendar (sync disabled)`);
         } catch (calErr) {
           console.warn(`[Tasks] Calendar removal failed: ${calErr.message}`);
         }
@@ -256,7 +464,6 @@ export const updateTask = async (req, res) => {
   }
 };
 
-// DELETE TASK
 export const deleteTask = async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
@@ -269,7 +476,7 @@ export const deleteTask = async (req, res) => {
       try {
         await removeTaskFromCalendarInternal(req.user.id, task.googleEventId);
       } catch (calendarError) {
-        console.warn('Failed to remove task from calendar:', calendarError.message);
+        console.warn('[Tasks] Failed to remove event from calendar:', calendarError.message);
       }
     }
 
@@ -280,7 +487,6 @@ export const deleteTask = async (req, res) => {
   }
 };
 
-// TOGGLE TASK COMPLETION
 export const toggleTask = async (req, res) => {
   try {
     let task = await Task.findById(req.params.id);
@@ -297,7 +503,7 @@ export const toggleTask = async (req, res) => {
       try {
         await markTaskDoneInCalendarInternal(req.user.id, task.googleEventId, task.done);
       } catch (calendarError) {
-        console.warn('Failed to update task in calendar:', calendarError.message);
+        console.warn('[Tasks] Failed to update event transparency:', calendarError.message);
       }
     }
 
@@ -312,7 +518,6 @@ export const toggleTask = async (req, res) => {
   }
 };
 
-// UPDATE TASK STATUS (Kanban drag-drop)
 export const updateTaskStatus = async (req, res) => {
   try {
     const { id }     = req.params;
@@ -325,7 +530,6 @@ export const updateTaskStatus = async (req, res) => {
   }
 };
 
-// SYNC SPECIFIC TASK TO CALENDAR (manual)
 export const syncTaskToCalendar = async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
@@ -348,7 +552,6 @@ export const syncTaskToCalendar = async (req, res) => {
   }
 };
 
-// GET CALENDAR EVENTS
 export const getCalendarEvents = async (req, res) => {
   try {
     if (!req.user.googleRefreshToken)
@@ -358,7 +561,7 @@ export const getCalendarEvents = async (req, res) => {
     if (!startDate || !endDate)
       return res.status(400).json({ message: 'startDate and endDate query params required' });
 
-    const auth = await getOAuth2Client(req.user.id);
+    const auth   = await getOAuth2Client(req.user.id);
     const events = await calendar.events.list({
       auth,
       calendarId:   'primary',
@@ -375,7 +578,6 @@ export const getCalendarEvents = async (req, res) => {
   }
 };
 
-// GET CALENDAR STATS
 export const getCalendarStats = async (req, res) => {
   try {
     if (!req.user.googleRefreshToken)
@@ -385,7 +587,7 @@ export const getCalendarStats = async (req, res) => {
     if (!startDate || !endDate)
       return res.status(400).json({ message: 'startDate and endDate query params required' });
 
-    const auth = await getOAuth2Client(req.user.id);
+    const auth   = await getOAuth2Client(req.user.id);
     const events = await calendar.events.list({
       auth,
       calendarId:   'primary',
@@ -408,9 +610,8 @@ export const getCalendarStats = async (req, res) => {
       const color          = event.colorId || '8';
       stats.byColor[color] = (stats.byColor[color] || 0) + 1;
       if (event.start.dateTime && event.end.dateTime) {
-        const start          = new Date(event.start.dateTime);
-        const end            = new Date(event.end.dateTime);
-        stats.totalDuration += (end - start) / (1000 * 60);
+        stats.totalDuration +=
+          (new Date(event.end.dateTime) - new Date(event.start.dateTime)) / (1000 * 60);
       }
     });
 
@@ -420,146 +621,31 @@ export const getCalendarStats = async (req, res) => {
   }
 };
 
-// ─── 2-WAY SYNC: Google Calendar → Database ───────────────────────────────────
-//
-// HOW IT WORKS:
-// 1. Uses Google Calendar "sync tokens" — after each events.list() call, Google
-//    returns a nextSyncToken. Save it to the User model.
-// 2. Next time this endpoint is called, send that token instead of timeMin/timeMax.
-//    Google then returns ONLY events that changed since the token was issued.
-// 3. Cancelled events (status === 'cancelled') are events deleted in Google Calendar.
-// 4. We match them against our MongoDB tasks by googleEventId and delete them.
-// 5. Only tasks with googleEventId are touched — local-only tasks are safe.
-//
-// CALLED BY: frontend on Tasks page load (silent background check)
-//
 export const syncFromCalendar = async (req, res) => {
   try {
     if (!req.user.googleRefreshToken) {
-      // Non-Google users: silently skip
       return res.status(200).json({
         message:      'No Google Calendar connected.',
         deletedCount: 0,
+        updatedCount: 0,
         deletedTasks: [],
       });
     }
 
-    const auth = await getOAuth2Client(req.user.id);
-    const user = await User.findById(req.user.id);
-
-    // ── Build list params ──────────────────────────────────────────────────────
-    const listParams = {
-      auth,
-      calendarId:  'primary',
-      showDeleted: true,   // ← crucial: include events with status='cancelled'
-      fields:      'nextSyncToken,nextPageToken,items(id,status,summary)',
-    };
-
-    if (user.calendarSyncToken) {
-      // Incremental sync: only changes since last token
-      listParams.syncToken = user.calendarSyncToken;
-      console.log(`[CalendarSync] Incremental sync for user ${req.user.id}`);
-    } else {
-      // First sync ever: establish baseline over a wide time window
-      const timeMin = new Date();
-      timeMin.setMonth(timeMin.getMonth() - 12); // 12 months back
-      const timeMax = new Date();
-      timeMax.setMonth(timeMax.getMonth() + 6);  // 6 months forward
-
-      listParams.timeMin      = timeMin.toISOString();
-      listParams.timeMax      = timeMax.toISOString();
-      listParams.singleEvents = true;
-      listParams.maxResults   = 2500;
-      console.log(`[CalendarSync] First baseline sync for user ${req.user.id}`);
-    }
-
-    // ── Call Google Calendar API ───────────────────────────────────────────────
-    let response;
-    try {
-      response = await calendar.events.list(listParams);
-    } catch (apiErr) {
-      // HTTP 410 Gone = sync token expired — clear it so next call does full sync
-      if (apiErr.code === 410 || apiErr.status === 410) {
-        console.warn(`[CalendarSync] Sync token expired for user ${req.user.id} — resetting`);
-        user.calendarSyncToken = null;
-        await user.save();
-        return res.status(200).json({
-          message:      'Calendar sync token expired and was reset. Refresh to re-sync.',
-          deletedCount: 0,
-          deletedTasks: [],
-          tokenReset:   true,
-        });
-      }
-      throw apiErr;
-    }
-
-    const events = response.data.items || [];
-
-    // ── Save the new sync token for next incremental call ─────────────────────
-    if (response.data.nextSyncToken) {
-      user.calendarSyncToken = response.data.nextSyncToken;
-      await user.save();
-      console.log(`[CalendarSync] New sync token saved for user ${req.user.id}`);
-    }
-
-    // ── Find cancelled event IDs ───────────────────────────────────────────────
-    const cancelledIds = events
-      .filter(e => e.status === 'cancelled')
-      .map(e => e.id);
-
-    console.log(`[CalendarSync] ${events.length} changed events, ${cancelledIds.length} cancelled`);
-
-    if (cancelledIds.length === 0) {
-      return res.status(200).json({
-        message:      'Calendar sync complete — no remote deletions found.',
-        deletedCount: 0,
-        deletedTasks: [],
-      });
-    }
-
-    // ── Match cancelled events against MongoDB tasks ───────────────────────────
-    // SAFETY: only tasks belonging to this user + have googleEventId
-    const tasksToDelete = await Task.find({
-      user:          req.user.id,
-      googleEventId: { $in: cancelledIds },
-    });
-
-    console.log(`[CalendarSync] ${tasksToDelete.length} matching tasks found in DB`);
-
-    const deletedTasks = [];
-
-    for (const task of tasksToDelete) {
-      console.log(
-        `[CalendarSync] Removing task "${task.title}" ` +
-        `(googleEventId: ${task.googleEventId}) — deleted from Google Calendar`
-      );
-      await Task.findByIdAndDelete(task._id);
-      deletedTasks.push({
-        id:    task._id,
-        title: task.title,
-        date:  task.date,
-      });
-    }
-
-    const count = deletedTasks.length;
-    const message = count > 0
-      ? `${count} task${count > 1 ? 's were' : ' was'} removed because ${count > 1 ? 'their' : 'its'} Google Calendar event${count > 1 ? 's were' : ' was'} deleted.`
-      : 'Calendar sync complete — no changes detected.';
-
-    console.log(`[CalendarSync] Done — ${count} tasks removed for user ${req.user.id}`);
+    const result = await syncCalendarToDatabase(req.user.id, { forceSync: true });
 
     res.status(200).json({
-      message,
-      deletedCount: count,
-      deletedTasks,
+      message:      `Sync complete — ${result.deleted || 0} removed, ${result.updated || 0} updated.`,
+      deletedCount: result.deleted || 0,
+      updatedCount: result.updated || 0,
+      deletedTasks: [],
     });
-
   } catch (err) {
-    // Non-fatal: log and return gracefully
-    console.error('[CalendarSync] Sync error:', err.message);
+    console.error('[syncFromCalendar] Error:', err.message);
     res.status(200).json({
-      message:      `Calendar sync skipped: ${err.message}`,
+      message:      `Sync skipped: ${err.message}`,
       deletedCount: 0,
+      updatedCount: 0,
       deletedTasks: [],
       error:        true,
     });

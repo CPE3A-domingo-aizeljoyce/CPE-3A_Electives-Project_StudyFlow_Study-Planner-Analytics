@@ -9,9 +9,23 @@ const getConfig = () => {
   };
 };
 
+// ✅ Returns { tasks: Task[], syncSummary: { deleted: number, updated: number } }
+// The backend runs a live Google Calendar sync before responding, so
+// the task list is already up-to-date when this promise resolves.
+// syncSummary is read from the X-Calendar-Sync response header
+// (server.js must have exposedHeaders: ['X-Calendar-Sync'] in CORS config).
 export const fetchTasks = async () => {
   const response = await axios.get(API_URL, getConfig());
-  return response.data;
+
+  let syncSummary = { deleted: 0, updated: 0 };
+  try {
+    const raw = response.headers['x-calendar-sync'];
+    if (raw) syncSummary = JSON.parse(raw);
+  } catch {
+    // Malformed or missing header — degrade gracefully
+  }
+
+  return { tasks: response.data, syncSummary };
 };
 
 export const fetchTask = async (id) => {
@@ -71,8 +85,7 @@ export const fetchCalendarStats = async (startDate, endDate) => {
   return response.data;
 };
 
-// ✅ NEW — triggers 2-way sync: checks Google Calendar for remotely deleted events
-// and removes matching tasks from MongoDB
+// Manual sync trigger — bypasses debounce on the backend
 export const triggerCalendarSync = async () => {
   const response = await axios.post(
     `${API_URL}calendar/sync-from-calendar`,

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as taskApi from '../api/taskApi.js';
 
 function getWeekStart(dateStr) {
@@ -59,101 +59,95 @@ function readHasGoogleCalendar() {
   }
 }
 
+function buildSyncMessage(syncSummary) {
+  if (!syncSummary) return '';
+  const { deleted = 0, updated = 0 } = syncSummary;
+  const parts = [];
+  if (deleted > 0)
+    parts.push(
+      `${deleted} task${deleted !== 1 ? 's were' : ' was'} removed — ` +
+      `Google Calendar event${deleted !== 1 ? 's were' : ' was'} deleted`
+    );
+  if (updated > 0)
+    parts.push(
+      `${updated} task${updated !== 1 ? 's were' : ' was'} updated from Google Calendar`
+    );
+  return parts.join(' · ');
+}
+
 const TaskCtx = createContext(null);
 
 export function TaskProvider({ children }) {
-  const [tasks,            setTasks]   = useState([]);
-  const [sprintGoals,      setGoals]   = useState(DEFAULT_SPRINT_GOALS);
-  const [loading,          setLoading] = useState(true);
-  const [error,            setError]   = useState(null);
+  const [tasks,               setTasks]      = useState([]);
+  const [sprintGoals,         setGoals]      = useState(DEFAULT_SPRINT_GOALS);
+  const [loading,             setLoading]    = useState(true);
+  const [error,               setError]      = useState(null);
+  const [hasGoogleCalendar,   setHasGCal]    = useState(readHasGoogleCalendar);
+  const [calendarSyncMessage, setSyncMsg]    = useState('');
+  const [calendarSyncStatus,  setSyncStatus] = useState('idle');
 
-  // ── Google Calendar connection state ──────────────────────────────────────
-  const [hasGoogleCalendar, setHasGoogleCalendar] = useState(readHasGoogleCalendar);
-
-  // ── 2-way sync state ──────────────────────────────────────────────────────
-  // 'idle' | 'syncing' | 'done'
-  const [calendarSyncStatus,  setSyncStatus]  = useState('idle');
-  // Set when remote deletions are found — shown as a banner in Tasks.jsx
-  const [calendarSyncMessage, setSyncMessage] = useState('');
-
-  // Re-read hasGoogleCalendar if localStorage changes (e.g. after AuthCallback)
   useEffect(() => {
-    const sync = () => setHasGoogleCalendar(readHasGoogleCalendar());
+    const sync = () => setHasGCal(readHasGoogleCalendar());
     window.addEventListener('storage', sync);
-    // Poll briefly on mount to catch same-tab updates from AuthCallback
     let count = 0;
-    const timer = setInterval(() => {
-      sync();
-      if (++count >= 5) clearInterval(timer);
-    }, 2000);
-    return () => {
-      window.removeEventListener('storage', sync);
-      clearInterval(timer);
-    };
+    const timer = setInterval(() => { sync(); if (++count >= 5) clearInterval(timer); }, 2000);
+    return () => { window.removeEventListener('storage', sync); clearInterval(timer); };
   }, []);
 
-  // ── Load tasks from backend ───────────────────────────────────────────────
-  const loadTasks = useCallback(async () => {
+  const loadTasks = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) { setLoading(true); setSyncStatus('syncing'); }
       setError(null);
-      const data = await taskApi.fetchTasks();
-      setTasks(data.map(normalizeTask));
+
+      const { tasks: rawTasks, syncSummary } = await taskApi.fetchTasks();
+
+      setTasks(rawTasks.map(normalizeTask));
+
+      const msg = buildSyncMessage(syncSummary);
+      if (msg) {
+        setSyncMsg(msg);
+        console.log('[TaskContext] Calendar sync result:', syncSummary, '→', msg);
+      }
     } catch (err) {
-      console.error('Error loading tasks:', err);
-      setError(err.message);
-      setTasks([]);
+      console.error('[TaskContext] Error loading tasks:', err);
+      if (!silent) {
+        setError(err.message);
+        setTasks([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) { setLoading(false); setSyncStatus('done'); }
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
-    loadTasks();
+    loadTasks(false);
   }, [loadTasks]);
 
-  // ── 2-way calendar sync — runs after tasks load ───────────────────────────
-  // Silently checks Google Calendar for events deleted remotely.
-  // Only runs if user has Google Calendar connected.
-  // If remote deletions found: removes those tasks from local state + shows banner.
+  // 45-second background polling
   useEffect(() => {
-    // Wait for tasks to finish loading before syncing
-    if (loading) return;
-    // Only sync if Google Calendar is connected
-    if (!readHasGoogleCalendar()) return;
+    const id = setInterval(() => {
+      console.log('[TaskContext] Polling — background sync check');
+      loadTasks(true);
+    }, 45 * 1000);
+    return () => clearInterval(id);
+  }, [loadTasks]);
 
-    const runSync = async () => {
-      setSyncStatus('syncing');
-      console.log('[TaskContext] Running 2-way calendar sync…');
-
-      try {
-        const result = await taskApi.triggerCalendarSync();
-        console.log('[TaskContext] Sync result:', result);
-
-        if (result.deletedCount > 0 && result.deletedTasks?.length > 0) {
-          // Remove deleted tasks from local state
-          const deletedIds = new Set(result.deletedTasks.map(t => String(t.id)));
-          setTasks(prev => prev.filter(t => !deletedIds.has(String(t._id || t.id))));
-          setSyncMessage(result.message);
-          console.log(`[TaskContext] Removed ${result.deletedCount} task(s) deleted from Google Calendar`);
-        }
-
-        if (result.tokenReset) {
-          // Token expired — next load will do full re-sync
-          console.warn('[TaskContext] Sync token was reset — next load will re-baseline');
-        }
-      } catch (err) {
-        // Non-fatal: sync failure should never break the app
-        console.warn('[TaskContext] Calendar sync failed silently:', err.message);
-      } finally {
-        setSyncStatus('done');
-      }
+  // Tab-switch sync — fires the instant the user returns to this tab.
+  // Edit or delete in Google Calendar, switch back here, changes appear in ~1-2s.
+  const lastVisibilitySyncRef = useRef(0);
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastVisibilitySyncRef.current < 5000) return;
+      lastVisibilitySyncRef.current = now;
+      console.log('[TaskContext] Tab visible — triggering background sync');
+      loadTasks(true);
     };
-
-    runSync();
-  }, [loading]); // runs once after initial load completes
-
-  // ── CRUD actions ──────────────────────────────────────────────────────────
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [loadTasks]);
 
   const toggle = async (id) => {
     try {
@@ -226,8 +220,7 @@ export function TaskProvider({ children }) {
 
   const updateGoal = (num, goal) => setGoals(prev => ({ ...prev, [num]: goal }));
 
-  // Dismiss the sync notification banner
-  const dismissSyncMessage = () => setSyncMessage('');
+  const dismissSyncMessage = () => setSyncMsg('');
 
   return (
     <TaskCtx.Provider value={{

@@ -29,14 +29,16 @@ const userSchema = new mongoose.Schema({
   googleTokenExpiry:  { type: Date,   default: null },
   avatar:             { type: String, default: null },
 
-  // ✅ NEW: stored sync token for incremental Google Calendar polling
-  // Google returns this after each events.list() call — used to fetch only CHANGES
+  // Kept for backward compat (no longer used for sync logic)
   calendarSyncToken:  { type: String, default: null },
 
-  isVerified:          { type: Boolean, default: false },
-  verificationToken:   { type: String },
-  verificationExpires: { type: Date   },
+  // ✅ NEW: timestamp of the last Google Calendar sync for this user.
+  // Used to debounce repeated Google API calls (prevents hammering on fast navigation).
+  calendarLastSynced: { type: Date, default: null },
 
+  isVerified:           { type: Boolean, default: false },
+  verificationToken:    { type: String },
+  verificationExpires:  { type: Date   },
   resetPasswordToken:   { type: String },
   resetPasswordExpires: { type: Date   },
 
