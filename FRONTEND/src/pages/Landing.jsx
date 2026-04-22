@@ -197,10 +197,10 @@ export function Landing() {
               style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.35)', fontWeight: 600 }}>
               Create free account
             </button>
-            <button className="w-full px-2 py-3 sm:px-8 sm:py-4 text-xs min-[360px]:text-sm sm:text-base font-semibold rounded-xl whitespace-nowrap transition-all border border-slate-700 hover:bg-slate-800"
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', fontWeight: 500 }}>
-              Already have an account
-            </button> 
+            <button onClick={() => navigate('/login')} className="w-full px-2 py-3 sm:px-8 sm:py-4 text-xs min-[360px]:text-sm sm:text-base font-semibold rounded-xl whitespace-nowrap transition-all border border-slate-700 hover:bg-slate-800"
+  style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', fontWeight: 500 }}>
+  Already have an account
+</button>
 
           </div>
           <div className="flex items-center justify-center gap-6 mt-6">

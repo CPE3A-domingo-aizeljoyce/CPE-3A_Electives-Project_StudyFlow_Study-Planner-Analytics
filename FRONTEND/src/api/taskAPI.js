@@ -2,6 +2,7 @@ import axios from 'axios';
 
 // FIXED: was hardcoded 'http://localhost:5000' — breaks in production
 // Add to your frontend .env: VITE_API_URL=http://localhost:5000
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const API_URL = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/tasks/`;
 
 const getConfig = () => {
@@ -12,7 +13,13 @@ const getConfig = () => {
 };
 
 export const fetchTasks = async () => {
-  const response = await axios.get(API_URL, getConfig());
+  const token = localStorage.getItem('token');   
+  const response = await axios.get(`${API_BASE}/api/tasks`, {
+    headers: { 
+      Authorization: `Bearer ${token}` 
+    }
+  });
+  
   return response.data;
 };
 

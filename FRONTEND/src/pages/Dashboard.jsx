@@ -3,7 +3,7 @@ import { useAppearance } from '../components/AppearanceProvider';
 import { useTasks, TODAY } from '../components/TaskContext';
 import { fetchAchievements } from '../api/achievementsApi';
 import { fetchAnalyticsData } from '../api/analyticsApi';
-import { Flame, Zap, Brain, Star, CheckSquare, Clock, TrendingUp, ChevronRight, Award } from 'lucide-react';
+import { Flame, Zap, Brain, Star, CheckSquare, Clock, TrendingUp, ChevronRight, Award, AlertCircle, Trash2 } from 'lucide-react';
 import { ResponsiveContainer, AreaChart, Area, CartesianGrid, XAxis, YAxis, Tooltip, BarChart, Bar } from 'recharts';
 
 // ─── Helper ───────────────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ function StatCard({ icon, label, value, sub, iconBg, colors }) {
 
 // ─── Dashboard page ───────────────────────────────────────────────────────────
 export function Dashboard() {
-  const { tasks, toggle } = useTasks();
+  const { tasks, toggle, updateTask, deleteTask } = useTasks();
   const { accent, colors, showStreak, showXPBar, compactMode } = useAppearance();
 
   // 🌟 REAL DATA STATES
@@ -128,6 +128,7 @@ export function Dashboard() {
 
   // Tasks Computations
   const todayTasks = tasks.filter(t => t.date === TODAY).sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const overdueTasks = tasks.filter(t => t.date < TODAY && !t.done);
   const allCompleted = tasks.filter(t => t.done).length;
   const allTotal = tasks.length;
   const productivityScore = allTotal === 0 ? 0 : Math.round((allCompleted / allTotal) * 100);
@@ -303,9 +304,44 @@ export function Dashboard() {
 
         {/* Today's Tasks */}
         <div className="lg:col-span-2 p-4 rounded-2xl min-w-0 overflow-hidden" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
+          {overdueTasks.length > 0 && (
+    <div className="mb-6 p-4 rounded-2xl" style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)' }}>
+      <div className="flex items-center gap-2 mb-3">
+        <AlertCircle className="w-4 h-4 text-red-500" />
+        <h3 className="text-sm uppercase tracking-wider" style={{ fontWeight: 700, color: '#ef4444' }}>Action Needed: Overdue Tasks</h3>
+      </div>
+      <div className="space-y-2">
+        {overdueTasks.map(task => (
+          <div key={task.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-xl" style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
+            <div className="flex-1 min-w-0 pr-2">
+              <div className="text-xs truncate" style={{ fontWeight: 600, color: colors.text }}>{task.title}</div>
+              <div className="text-xs" style={{ color: colors.textMuted }}>Missed on: {task.date}</div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button 
+                onClick={() => updateTask(task.id, { date: TODAY })} 
+                className="px-3 py-1.5 rounded-lg text-xs transition-all hover:scale-105" 
+                style={{ background: accent.main, color: '#fff', fontWeight: 600 }}>
+                Reschedule to Today
+              </button>
+              <button 
+                onClick={() => { if(window.confirm('Delete this overdue task?')) deleteTask(task.id); }} 
+                className="p-1.5 rounded-lg hover:bg-red-500/10 transition-all text-red-400">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )}
+
+
           <div className="flex items-center justify-between mb-4">
             <div>
               <h3 className="text-base" style={{ fontWeight: 600, color: colors.text }}>Today's Schedule</h3>
+
+
               {todayTotal > 0 && (
                 <p className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
                   {todayDone} of {todayTotal} task{todayTotal !== 1 ? 's' : ''} done today
