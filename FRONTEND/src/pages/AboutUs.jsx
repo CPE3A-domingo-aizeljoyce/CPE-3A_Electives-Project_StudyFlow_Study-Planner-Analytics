@@ -31,7 +31,7 @@ export function AboutUs() {
             style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.45)' }}>
             <Brain className="w-4 h-4 text-white" />
           </div>
-          <span className="text-white text-base" style={{ fontWeight: 700, letterSpacing: '-0.3px' }}>StudyFlow</span>
+          <span className="text-white text-base" style={{ fontWeight: 700, letterSpacing: '-0.3px' }}>AcadFlu</span>
         </div>
       </nav>
 
@@ -46,7 +46,7 @@ export function AboutUs() {
           Meet the Creators
         </h1>
         <p className="max-w-2xl mx-auto text-slate-400 text-lg" style={{ lineHeight: 1.7 }}>
-          We are a team of passionate Computer Engineering students from Bulacan State University. StudyFlow is our solution to the ultimate student dilemma: staying focused in a world full of distractions.
+          We are a team of passionate Computer Engineering students from Bulacan State University. AcadFlu is our solution to the ultimate student dilemma: staying focused in a world full of distractions.
         </p>
       </section>
 
@@ -95,7 +95,7 @@ export function AboutUs() {
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Brain className="w-5 h-5" style={{ color: '#8b5cf6' }} />
-            <span className="text-slate-400 text-sm" style={{ fontWeight: 600 }}>StudyFlow Team</span>
+            <span className="text-slate-400 text-sm" style={{ fontWeight: 600 }}>AcadFlu Team</span>
           </div>
           <div className="text-slate-600 text-xs text-center sm:text-right">
             © 2026 Bulacan State University<br />

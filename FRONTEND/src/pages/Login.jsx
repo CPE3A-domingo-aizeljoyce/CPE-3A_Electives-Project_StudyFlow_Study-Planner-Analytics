@@ -388,7 +388,7 @@ export function Login() {
                 style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.4)' }}>
                 <Brain className="w-5 h-5 text-white" />
               </div>
-              <span className="text-white text-base" style={{ fontWeight: 700 }}>StudyFlow</span>
+              <span className="text-white text-base" style={{ fontWeight: 700 }}>AcadFlu</span>
             </button>
           </div>
 
@@ -413,7 +413,7 @@ export function Login() {
         </div>
 
         <div className="text-slate-700 text-xs" style={{ lineHeight: 1.6, textAlign: 'center' }}>
-          © 2026 StudyFlow · Built for learners<br />
+          © 2026 AcadFlu · Built for learners<br />
           Developed by BS Computer Engineering Students<br />
           Bulacan State University
         </div>
@@ -428,7 +428,7 @@ export function Login() {
             style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
             <Brain className="w-5 h-5 text-white" />
           </div>
-          <span className="text-white text-base" style={{ fontWeight: 700 }}>StudyFlow</span>
+          <span className="text-white text-base" style={{ fontWeight: 700 }}>AcadFlu</span>
         </button>
 
         <div className="w-full max-w-sm">

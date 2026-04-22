@@ -77,7 +77,7 @@ export function ResetPassword() {
         >
           <Brain className="w-5 h-5 text-white" />
         </div>
-        <span className="text-white text-base" style={{ fontWeight: 700 }}>StudyFlow</span>
+        <span className="text-white text-base" style={{ fontWeight: 700 }}>AcadFlu</span>
       </button>
 
       <div

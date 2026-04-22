@@ -38,7 +38,7 @@ export function Landing() {
             style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.45)' }}>
             <Brain className="w-5 h-5 text-white" />
           </div>
-          <span className="text-white text-base" style={{ fontWeight: 700, letterSpacing: '-0.3px' }}>StudyFlow</span>
+          <span className="text-white text-base" style={{ fontWeight: 700, letterSpacing: '-0.3px' }}>AcadFlu</span>
         </div>
 
         <div className="hidden md:flex items-center gap-8">
@@ -83,7 +83,7 @@ export function Landing() {
         </h1>
 
         <p className="max-w-xl text-slate-400 text-lg mb-10" style={{ lineHeight: 1.7 }}>
-          StudyFlow combines Pomodoro timers, habit tracking, deep analytics, and gamified XP into one distraction-free workspace built for serious learners.
+          AcadFlu combines Pomodoro timers, habit tracking, deep analytics, and gamified XP into one distraction-free workspace built for serious learners.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center gap-3 mb-16">
@@ -113,7 +113,7 @@ export function Landing() {
             <div className="w-3 h-3 rounded-full" style={{ background: '#f59e0b' }} />
             <div className="w-3 h-3 rounded-full" style={{ background: '#22c55e' }} />
             <div className="flex-1 mx-4 h-6 rounded-lg flex items-center justify-center text-xs" style={{ background: '#131929', color: '#334155' }}>
-              app.studyflow.io/dashboard
+              app.acadflu.io/dashboard
             </div>
           </div>
           <div className="relative" style={{ minHeight: 200, background: '#0f1626', padding: '1.5rem 1rem' }}>
@@ -189,7 +189,7 @@ export function Landing() {
           </div>
           <h2 className="text-3xl md:text-4xl text-white mb-4" style={{ fontWeight: 800, letterSpacing: '-0.8px' }}>Ready to level up?</h2>
           <p className="text-slate-400 mb-8 max-w-md mx-auto" style={{ lineHeight: 1.7 }}>
-            Join 50,000+ students who've transformed their study habits with StudyFlow. It's completely free to start.
+            Join 50,000+ students who've transformed their study habits with AcadFlu. It's completely free to start.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button onClick={() => navigate('/login?tab=signup')}
@@ -221,10 +221,10 @@ export function Landing() {
             <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
               <Brain className="w-4 h-4 text-white" />
             </div>
-            <span className="text-slate-400 text-sm" style={{ fontWeight: 600 }}>StudyFlow</span>
+            <span className="text-slate-400 text-sm" style={{ fontWeight: 600 }}>AcadFlu</span>
           </div>
           <div className="text-slate-600 text-xs" style={{ lineHeight: 1.6, textAlign: 'center' }}>
-            © 2026 StudyFlow. Built for learners.<br />
+            © 2026 AcadFlu. Built for learners.<br />
             Developed by BS Computer Engineering Students<br />
             Bulacan State University
           </div>
