@@ -1,6 +1,6 @@
-# StudyFlow Backend
+# AcadFlu Backend
 
-This backend is responsible for handling the server-side logic, API endpoints, and database operations of the StudyFlow application.
+This backend is responsible for handling the server-side logic, API endpoints, and database operations of the AcadFlu application.
 
 ---
 

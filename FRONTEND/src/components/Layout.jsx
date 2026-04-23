@@ -168,7 +168,7 @@ function SidebarContent({ collapsed, isMobile, colors, accent, lvl, realXP, real
           <Brain className="w-5 h-5 text-white" />
         </div>
         {(!collapsed || isMobile) && (
-          <span className="text-sm flex-1" style={{ fontWeight: 700, color: colors.text }}>StudyFlow</span>
+          <span className="text-sm flex-1" style={{ fontWeight: 700, color: colors.text }}>AcadFlu</span>
         )}
         {isMobile && (
           <button onClick={onClose} className="w-8 h-8 rounded-xl flex items-center justify-center"
@@ -448,7 +448,7 @@ export function Layout() {
               style={{ background: `linear-gradient(135deg, ${accent.main}, ${accent.light})` }}>
               <Brain className="w-4 h-4 text-white" />
             </div>
-            <span className="text-sm" style={{ fontWeight: 700, color: colors.text }}>StudyFlow</span>
+            <span className="text-sm" style={{ fontWeight: 700, color: colors.text }}>Acadflu</span>
           </div>
           <button
             data-profile-trigger

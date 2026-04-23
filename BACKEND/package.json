@@ -1,7 +1,7 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "description": "StudyFlow backend",
+  "description": "AcadFlu backend",
   "main": "server.js",
   "type": "module",
   "scripts": {
