@@ -22,8 +22,6 @@ app.use(helmet({
 app.use(cors({
   origin:         process.env.CLIENT_URL || 'http://localhost:5173',
   credentials:    true,
-  // ✅ Required: exposes the custom sync summary header to the browser (Axios)
-  // Without this, response.headers['x-calendar-sync'] is always undefined
   exposedHeaders: ['X-Calendar-Sync'],
 }));
 
