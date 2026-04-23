@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
-import { Brain, Eye, EyeOff, ArrowLeft, Zap, Flame, Trophy, AlertCircle, Mail, Loader2 } from 'lucide-react';
+import { Brain, Eye, EyeOff, ArrowLeft, Zap, Flame, Trophy, AlertCircle, Mail, Loader2, Sun, Moon } from 'lucide-react';
 import { loginUser, registerUser, forgotPasswordApi } from '../api/authApi';
-
-
 
 const EMAIL_REGEX = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
 
@@ -76,7 +74,23 @@ export function Login() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState(searchParams.get('tab') === 'signup' ? 'signup' : 'login');
- const isLight = localStorage.getItem('public_theme') === 'light';
+  const [isLight, setIsLight] = useState(() => localStorage.getItem('public_theme') === 'light');
+
+  // Sync theme
+  useEffect(() => {
+    const handleStorage = () => setIsLight(localStorage.getItem('public_theme') === 'light');
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  const toggleTheme = () => {
+    setIsLight(prev => {
+      const next = !prev;
+      localStorage.setItem('public_theme', next ? 'light' : 'dark');
+      window.dispatchEvent(new Event('storage'));
+      return next;
+    });
+  };
 
   const BG = isLight ? '#f8fafc' : '#0d1117';
   const BORDER = isLight ? 'rgba(203, 213, 225, 0.7)' : '#1a2540';
@@ -386,37 +400,64 @@ export function Login() {
             style={{ background: 'radial-gradient(closest-side, rgba(99,102,241,0.12) 0%, transparent 100%)', filter: 'blur(80px)' }} />
         </div>
       )}
+
       {/* Mobile Back Button */}
       <button
         onClick={() => view === 'forgot' ? closeForgot() : navigate(-1)}
-        className="lg:hidden fixed top-4 left-4 flex items-center gap-1.5 p-2 rounded-lg transition-all z-50"
+        className="lg:hidden fixed top-4 left-4 flex items-center gap-1.5 p-2 rounded-lg transition-all z-50 hover:bg-black/5 dark:hover:bg-white/5"
         style={{ color: TEXT_SUB, fontWeight: 500 }}>
         <ArrowLeft className="w-5 h-5" />
       </button>
 
+      {/* Mobile Theme Toggle (Top Right for mobile view) */}
+      <button 
+        onClick={toggleTheme} 
+        className="lg:hidden fixed top-4 right-4 p-2.5 rounded-full transition-all duration-200 z-50 hover:scale-110"
+        style={{ color: TEXT_SUB, background: isLight ? '#e2e8f0' : '#1e293b', boxShadow: isLight ? '0 4px 10px rgba(0,0,0,0.05)' : '0 4px 10px rgba(0,0,0,0.3)' }}
+      >
+        {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
+      </button>
+
       {/* ── Left panel ───────────────────────────────────────────────────────── */}
-      <div className="hidden lg:flex flex-col justify-between w-[420px] flex-shrink-0 p-10 overflow-y-auto transition-colors duration-300"
+      <div className="hidden lg:flex flex-col justify-between w-[420px] flex-shrink-0 p-10 overflow-y-auto transition-colors duration-300 relative z-10"
         style={{ background: CARD2, borderRight: `1px solid ${BORDER}` }}>
+
         <div>
-          <div className="flex items-center gap-2 mb-16">
-            <button
-              onClick={() => view === 'forgot' ? closeForgot() : navigate(-1)}
-              className="flex items-center justify-center p-2 rounded-lg transition-all"
-              style={{ color: TEXT_SUB }}>
-              <ArrowLeft className="w-5 h-5" />
+          {/* Desktop header with Logo and Theme Toggle */}
+          <div className="flex items-center justify-between mb-16 relative w-full">
+            
+            {/* Left side: Back Button & Logo */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => view === 'forgot' ? closeForgot() : navigate(-1)}
+                className="flex items-center justify-center p-2 rounded-lg transition-all hover:bg-black/5 dark:hover:bg-white/5"
+                style={{ color: TEXT_SUB }}>
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <button onClick={() => navigate('/')} className="flex items-center gap-2.5 group">
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105"
+                  style={{ background: 'linear-gradient(135deg, #2563eb, #6366f1)', boxShadow: isLight ? '0 4px 15px rgba(37,99,235,0.3)' : '0 0 20px rgba(99,102,241,0.4)' }}>
+                  <Brain className="w-5 h-5 text-white" />
+                </div>
+                <span className="text-base" style={{ color: TEXT_MAIN, fontWeight: 800, letterSpacing: '-0.3px' }}>AcadFlu</span>
+              </button>
+            </div>
+
+            {/* Right side: Desktop Theme Toggle */}
+            <button 
+              onClick={toggleTheme} 
+              className="p-2.5 rounded-full transition-all duration-200 hover:scale-110"
+              style={{ color: TEXT_SUB, background: isLight ? '#e2e8f0' : '#1e293b', boxShadow: isLight ? '0 4px 10px rgba(0,0,0,0.05)' : '0 4px 10px rgba(0,0,0,0.3)' }}
+            >
+              {isLight ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
             </button>
-            <button onClick={() => navigate('/')} className="flex items-center gap-2.5 group flex-1">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 20px rgba(99,102,241,0.4)' }}>
-                <Brain className="w-5 h-5 text-white" />
-              </div>
-              <span className="text-base" style={{ color: TEXT_MAIN, fontWeight: 700 }}>AcadFlu</span>
-            </button>
+
           </div>
 
           <h2 className="text-2xl mb-3" style={{ color: TEXT_MAIN, fontWeight: 800, letterSpacing: '-0.5px' }}>
             Your academic<br />glow-up starts here.
           </h2>
+    
           <p className="text-sm mb-10" style={{ color: TEXT_SUB, lineHeight: 1.7 }}>
             Join 50,000+ students who've transformed how they study — with science-backed techniques and gamified progress.
           </p>
@@ -442,12 +483,12 @@ export function Login() {
       </div>
 
       {/* ── Right panel ──────────────────────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col items-center px-4 sm:px-6 py-12 pb-12 relative overflow-y-auto w-full">
+      <div className="flex-1 flex flex-col items-center px-4 sm:px-6 py-12 pb-12 relative overflow-y-auto w-full z-10">
 
         {/* Mobile Logo */}
         <button onClick={() => navigate('/')} className="lg:hidden flex flex-col items-center gap-2 mb-8">
           <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+            style={{ background: 'linear-gradient(135deg, #2563eb, #6366f1)', boxShadow: isLight ? '0 4px 15px rgba(37,99,235,0.3)' : '0 0 20px rgba(99,102,241,0.4)' }}>
             <Brain className="w-5 h-5 text-white" />
           </div>
           <span className="text-base" style={{ color: TEXT_MAIN, fontWeight: 700 }}>AcadFlu</span>
@@ -522,7 +563,7 @@ export function Login() {
                   </div>
                   <button type="submit" disabled={forgotLoading}
                     className="w-full py-3 rounded-xl text-white text-sm transition-all hover:scale-[1.02] disabled:opacity-60 disabled:cursor-not-allowed"
-                    style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 24px rgba(99,102,241,0.35)', fontWeight: 600 }}>
+                    style={{ background: 'linear-gradient(135deg, #2563eb, #6366f1)', boxShadow: isLight ? '0 8px 20px rgba(37,99,235,0.25)' : '0 0 24px rgba(99,102,241,0.35)', fontWeight: 600 }}>
                     {forgotLoading ? 'Sending reset link…' : 'Send reset link'}
                   </button>
                 </form>
@@ -538,7 +579,7 @@ export function Login() {
                   <button key={t} onClick={() => setTab(t)}
                     className="flex-1 py-2.5 rounded-xl text-sm transition-all duration-200"
                     style={tab === t
-                      ? { background: '#6366f1', color: '#fff', fontWeight: 600, boxShadow: '0 0 16px rgba(99,102,241,0.4)' }
+                      ? { background: isLight ? '#2563eb' : '#6366f1', color: '#fff', fontWeight: 600, boxShadow: isLight ? '0 4px 15px rgba(37,99,235,0.3)' : '0 0 16px rgba(99,102,241,0.4)' }
                       : { color: TEXT_SUB, fontWeight: 500 }}>
                     {t === 'login' ? 'Log in' : 'Sign up'}
                   </button>
@@ -716,8 +757,8 @@ export function Login() {
                       onClick={() => setRememberMe(v => !v)}>
                       <div className="w-4 h-4 rounded flex items-center justify-center flex-shrink-0 transition-all"
                         style={{
-                          background: rememberMe ? '#6366f1' : 'transparent',
-                          border:     `1.5px solid ${rememberMe ? '#6366f1' : BORDER}`,
+                          background: rememberMe ? (isLight ? '#2563eb' : '#6366f1') : 'transparent',
+                          border:     `1.5px solid ${rememberMe ? (isLight ? '#2563eb' : '#6366f1') : BORDER}`,
                         }}>
                         {rememberMe && (
                           <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
@@ -731,7 +772,7 @@ export function Login() {
 
                   <button type="submit" disabled={loading || googleLoading || domainChecking}
                     className="w-full py-3 rounded-xl text-white text-sm transition-all hover:scale-[1.02] disabled:opacity-60 disabled:cursor-not-allowed mt-2"
-                    style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', boxShadow: '0 0 24px rgba(99,102,241,0.35)', fontWeight: 600 }}>
+                    style={{ background: 'linear-gradient(135deg, #2563eb, #6366f1)', boxShadow: isLight ? '0 8px 20px rgba(37,99,235,0.25)' : '0 0 24px rgba(99,102,241,0.35)', fontWeight: 600 }}>
                     {loading
                       ? (tab === 'login' ? 'Signing in…' : 'Creating account…')
                       : (tab === 'login' ? 'Sign in' : 'Create account')}
@@ -748,7 +789,7 @@ export function Login() {
                     onClick={() => handleGoogleLogin()}
                     disabled={googleLoading}
                     className="w-full py-3 rounded-xl text-sm transition-all hover:scale-[1.02] flex items-center justify-center gap-3 disabled:opacity-60 disabled:cursor-not-allowed"
-                    style={{ background: CARD, border: `1px solid ${BORDER}`, color: TEXT_MAIN, fontWeight: 500 }}
+                    style={{ background: CARD, border: `1px solid ${BORDER}`, color: TEXT_MAIN, fontWeight: 500, boxShadow: SHADOW }}
                     onMouseEnter={e => { if (!googleLoading) e.currentTarget.style.borderColor = '#4285F4'; }}
                     onMouseLeave={e => { e.currentTarget.style.borderColor = BORDER; }}
                   >

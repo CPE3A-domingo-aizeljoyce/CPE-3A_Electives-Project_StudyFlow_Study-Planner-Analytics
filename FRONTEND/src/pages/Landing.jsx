@@ -78,7 +78,7 @@ export function Landing() {
           <span className="text-base" style={{ color: theme.textMain, fontWeight: 800, letterSpacing: '-0.3px' }}>AcadFlu</span>
         </div>
 
-       {/* 🌟 FIXED: Gitnang-gitna na ulit ang links */}
+     
         <div className="hidden md:flex items-center justify-center gap-8 absolute left-1/2 transform -translate-x-1/2">
           <a href="#features" className="text-sm transition-colors hover:opacity-70" style={{ color: theme.textSub, fontWeight: 600 }}>
             Features
@@ -116,7 +116,6 @@ export function Landing() {
   className="relative px-6 md:px-12 flex flex-col items-center justify-center text-center overflow-hidden min-h-screen"
   style={{ paddingTop: '200px', paddingBottom: '100px' }}
         >
-        {/* 🌟 FIXED: Visible, Hardcoded Gradient Glow (No image needed) */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[600px] rounded-full pointer-events-none -z-10"
           style={{ 
             background: `radial-gradient(closest-side, ${theme.heroGlow} 0%, transparent 100%)`, 
@@ -131,11 +130,16 @@ export function Landing() {
 
         <h1 className="max-w-3xl text-4xl md:text-6xl mb-6" style={{ color: theme.textMain, fontWeight: 800, letterSpacing: '-1.5px', lineHeight: 1.1 }}>
           Study smarter.{' '}
-          <span style={{ 
-            background: isLight ? 'linear-gradient(135deg, #2563eb, #06b6d4)' : 'linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4)', 
-            WebkitBackgroundClip: 'text', 
-            WebkitTextFillColor: 'transparent' 
-          }}>
+          <span 
+            key={isLight ? 'light' : 'dark'}
+            style={{ 
+              background: isLight ? 'linear-gradient(135deg, #2563eb, #06b6d4)' : 'linear-gradient(135deg, #6366f1, #8b5cf6, #06b6d4)', 
+              WebkitBackgroundClip: 'text',
+              backgroundClip: 'text',
+              WebkitTextFillColor: 'transparent',
+              color: 'transparent',
+              display: 'inline-block'
+            }}>
             Level up faster.
           </span>
         </h1>
@@ -239,7 +243,6 @@ export function Landing() {
 
       {/* CTA */}
      <section className="px-6 md:px-12 mb-24">
-        {/* 🌟 FIXED: Reverted back to max-w-3xl and rounded-3xl */}
         <div className="max-w-3xl mx-auto rounded-3xl p-12 text-center relative overflow-hidden transition-all duration-300 hover:-translate-y-2"
           style={{ background: theme.card, border: `1px solid ${theme.border}`, boxShadow: theme.baseShadow }}
           onMouseEnter={e => e.currentTarget.style.boxShadow = `0 30px 60px ${theme.hoverShadow}`}
