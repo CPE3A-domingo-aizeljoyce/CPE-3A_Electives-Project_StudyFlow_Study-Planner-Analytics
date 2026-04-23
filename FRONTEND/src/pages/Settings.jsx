@@ -1,15 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAppearance, ACCENT_PALETTE } from '../components/AppearanceProvider';
 import {
   User, Clock, Palette, Shield, ChevronRight,
-  Check, Sun, Moon, Eye, EyeOff, AlertTriangle, X,
+  Check, Sun, Moon, Eye, EyeOff, AlertTriangle, X, KeyRound,
 } from 'lucide-react';
-import {
-  getSettingsApi,
-  updateSettingsApi,
-  changePasswordApi,
-  deleteAccountApi,
-} from '../api/authApi';
+
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const sections = [
   { id: 'profile',    label: 'Profile',        icon: User,    desc: 'Manage your account information' },
@@ -22,19 +18,35 @@ const LS_SETTINGS_KEY = 'sf_settings';
 
 const defaultProfile = {
   name: '', email: '', avatar: null,
-  bio: '', timezone: 'Asia/Manila', studyGoal: '4',
+  bio: '', studyGoal: '4',
+  isGoogleAccount: false, hasPassword: true,
 };
 
 const defaultTimer = {
   focusDuration: '25', shortBreak: '5', longBreak: '15',
   sessionsBeforeLong: '4', autoStartBreaks: true, autoStartSessions: false,
-  soundEnabled: true, notifyOnComplete: true,
+  soundEnabled: true,
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getInitials(name) {
   if (!name || !name.trim()) return '?';
   return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function authHeaders() {
+  const token = localStorage.getItem('token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
+
+async function apiFetch(path, options = {}) {
+  const res  = await fetch(`${BASE_URL}${path}`, { ...options, headers: { ...authHeaders(), ...(options.headers || {}) } });
+  const data = await res.json();
+  if (!res.ok) throw data;
+  return data;
 }
 
 function loadSavedSettings() {
@@ -82,21 +94,23 @@ function Toggle({ value, onChange, accentRgb, colors }) {
   );
 }
 
-function InputField({ label, value, onChange, type = 'text', placeholder = '', inputStyle, colors, disabled = false }) {
+function AlertBox({ type, message }) {
+  if (!message) return null;
+  const isError = type === 'error';
   return (
-    <div>
-      <label className="block text-xs mb-1.5" style={{ fontWeight: 500, color: colors.textSub }}>
-        {label}
-      </label>
-      <input
-        type={type}
-        className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
-        style={{ ...inputStyle, opacity: disabled ? 0.55 : 1, cursor: disabled ? 'not-allowed' : 'text' }}
-        value={value}
-        onChange={e => !disabled && onChange(e.target.value)}
-        placeholder={placeholder}
-        disabled={disabled}
-      />
+    <div
+      className="flex items-center gap-2 p-3 rounded-xl text-xs"
+      style={{
+        background: isError ? 'rgba(239,68,68,0.1)'           : 'rgba(34,197,94,0.1)',
+        border:     isError ? '1px solid rgba(239,68,68,0.25)' : '1px solid rgba(34,197,94,0.25)',
+        color:      isError ? '#f87171'                        : '#4ade80',
+      }}
+    >
+      {isError
+        ? <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
+        : <Check         className="w-3.5 h-3.5 flex-shrink-0" />
+      }
+      <span>{message}</span>
     </div>
   );
 }
@@ -130,31 +144,41 @@ function PasswordField({ label, value, onChange, placeholder, inputStyle, colors
   );
 }
 
-function AlertBox({ type, message }) {
-  if (!message) return null;
-  const isError = type === 'error';
+// Avatar with automatic initials fallback
+function Avatar({ name, avatarUrl, accent }) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const initials = getInitials(name);
+
+  const showImg = avatarUrl && !imgFailed;
+
   return (
     <div
-      className="flex items-center gap-2 p-3 rounded-xl text-xs"
+      className="w-16 h-16 rounded-2xl flex items-center justify-center overflow-hidden"
       style={{
-        background: isError ? 'rgba(239,68,68,0.1)'  : 'rgba(34,197,94,0.1)',
-        border:     isError ? '1px solid rgba(239,68,68,0.25)' : '1px solid rgba(34,197,94,0.25)',
-        color:      isError ? '#f87171' : '#4ade80',
+        background: showImg ? 'transparent' : `linear-gradient(135deg, ${accent.main}, ${accent.light})`,
+        boxShadow:  `0 0 20px rgba(${accent.rgb},0.4)`,
+        flexShrink: 0,
       }}
     >
-      {isError
-        ? <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
-        : <Check         className="w-3.5 h-3.5 flex-shrink-0" />
-      }
-      <span>{message}</span>
+      {showImg ? (
+        <img
+          src={avatarUrl}
+          alt={name}
+          className="w-full h-full object-cover"
+          onError={() => setImgFailed(true)}
+        />
+      ) : (
+        <span className="text-xl text-white" style={{ fontWeight: 800 }}>
+          {initials}
+        </span>
+      )}
     </div>
   );
 }
 
 function DeleteModal({ onConfirm, onCancel, colors }) {
   const [confirmText, setConfirmText] = useState('');
-  const [loading, setLoading]         = useState(false);
-
+  const [loading,     setLoading]     = useState(false);
   const canConfirm = confirmText === 'DELETE' && !loading;
 
   const handleConfirm = async () => {
@@ -173,12 +197,8 @@ function DeleteModal({ onConfirm, onCancel, colors }) {
         className="w-full max-w-md rounded-2xl p-6"
         style={{ background: colors.card, border: '1px solid rgba(239,68,68,0.35)' }}
       >
-        {/* Header */}
         <div className="flex items-start gap-3 mb-5">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ background: 'rgba(239,68,68,0.12)' }}
-          >
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: 'rgba(239,68,68,0.12)' }}>
             <AlertTriangle className="w-5 h-5 text-red-400" />
           </div>
           <div className="flex-1">
@@ -186,24 +206,18 @@ function DeleteModal({ onConfirm, onCancel, colors }) {
             <p className="text-xs mt-1" style={{ color: colors.textMuted, lineHeight: 1.6 }}>
               This will permanently delete your account and{' '}
               <span style={{ fontWeight: 700, color: '#f87171' }}>all your data</span>
-              {' '}(tasks, study sessions, goals, notes). This action{' '}
-              <span style={{ fontWeight: 700, color: '#f87171' }}>cannot be undone</span>.
+              {' '}(tasks, study sessions, goals, notes, achievements).
+              This action <span style={{ fontWeight: 700, color: '#f87171' }}>cannot be undone</span>.
             </p>
           </div>
-          <button
-            onClick={onCancel}
-            style={{ color: colors.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
-          >
+          <button onClick={onCancel} style={{ color: colors.textMuted, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Confirm input */}
         <div className="mb-4">
           <label className="block text-xs mb-1.5" style={{ fontWeight: 500, color: colors.textSub }}>
-            Type{' '}
-            <span style={{ fontWeight: 700, color: '#f87171', letterSpacing: '0.05em' }}>DELETE</span>
-            {' '}to confirm
+            Type{' '}<span style={{ fontWeight: 700, color: '#f87171', letterSpacing: '0.05em' }}>DELETE</span>{' '}to confirm
           </label>
           <input
             type="text"
@@ -211,37 +225,22 @@ function DeleteModal({ onConfirm, onCancel, colors }) {
             onChange={e => setConfirmText(e.target.value)}
             placeholder="Type DELETE here"
             className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
-            style={{
-              background: colors.card2,
-              border: '1px solid rgba(239,68,68,0.3)',
-              color: colors.text,
-            }}
+            style={{ background: colors.card2, border: '1px solid rgba(239,68,68,0.3)', color: colors.text }}
           />
         </div>
 
-        {/* Buttons */}
         <div className="flex gap-3">
           <button
             onClick={onCancel}
             className="flex-1 py-2.5 rounded-xl text-sm"
-            style={{
-              background: colors.card2,
-              border: `1px solid ${colors.border}`,
-              color: colors.textSub,
-              fontWeight: 500,
-              cursor: 'pointer',
-            }}
-          >
-            Cancel
-          </button>
+            style={{ background: colors.card2, border: `1px solid ${colors.border}`, color: colors.textSub, fontWeight: 500, cursor: 'pointer' }}
+          >Cancel</button>
           <button
             onClick={handleConfirm}
             disabled={!canConfirm}
             className="flex-1 py-2.5 rounded-xl text-sm text-white"
             style={{
-              background: canConfirm
-                ? 'linear-gradient(135deg, #ef4444, #dc2626)'
-                : 'rgba(239,68,68,0.25)',
+              background: canConfirm ? 'linear-gradient(135deg, #ef4444, #dc2626)' : 'rgba(239,68,68,0.25)',
               fontWeight: 600,
               cursor: canConfirm ? 'pointer' : 'not-allowed',
               border: 'none',
@@ -265,37 +264,38 @@ export function Settings() {
     setTheme, setAccent, setCompact, setAnimations, setShowXPBar, setShowStreak,
   } = useAppearance();
 
-  // Profile & Timer state
   const [profile,   setProfile]   = useState(defaultProfile);
   const [timer,     setTimer]     = useState(defaultTimer);
   const [saved,     setSaved]     = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [loading,   setLoading]   = useState(true);
 
   // Password state
   const [pwFields, setPwFields] = useState({ current: '', newPw: '', confirm: '' });
   const [pwStatus, setPwStatus] = useState({ loading: false, error: '', success: '' });
 
-  // Delete state
+  // Delete account state
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteError,     setDeleteError]     = useState('');
 
   // ── Load settings on mount ─────────────────────────────────────────────────
   useEffect(() => {
-    // Show cached data immediately
+    // Show cached data immediately for fast feel
     const local = loadSavedSettings();
     if (local?.profile) setProfile(p => ({ ...p, ...local.profile }));
-    if (local?.timer)   setTimer(local.timer);
+    if (local?.timer)   setTimer(t => ({ ...t, ...local.timer }));
 
-    // Always fetch authoritative data from server
-    getSettingsApi()
+    // Fetch authoritative data from server
+    apiFetch('/api/settings')
       .then(data => {
         const p = {
-          name:      data.profile?.name      || '',
-          email:     data.profile?.email     || '',
-          avatar:    data.profile?.avatar    || null,
-          bio:       data.profile?.bio       || '',
-          timezone:  data.profile?.timezone  || 'Asia/Manila',
-          studyGoal: String(data.profile?.studyGoal ?? '4'),
+          name:            data.profile?.name            || '',
+          email:           data.profile?.email           || '',
+          avatar:          data.profile?.avatar          || null,
+          bio:             data.profile?.bio             || '',
+          studyGoal:       String(data.profile?.studyGoal ?? '4'),
+          isGoogleAccount: data.profile?.isGoogleAccount ?? false,
+          hasPassword:     data.profile?.hasPassword     ?? true,
         };
         const t = {
           focusDuration:      String(data.timer?.focusDuration      ?? '25'),
@@ -305,26 +305,26 @@ export function Settings() {
           autoStartBreaks:    data.timer?.autoStartBreaks   ?? true,
           autoStartSessions:  data.timer?.autoStartSessions ?? false,
           soundEnabled:       data.timer?.soundEnabled      ?? true,
-          notifyOnComplete:   data.timer?.notifyOnComplete  ?? true,
         };
         setProfile(p);
         setTimer(t);
         saveSettingsLocally({ profile: p, timer: t });
       })
-      .catch(err => console.error('Failed to load settings:', err));
+      .catch(err => console.error('Failed to load settings:', err))
+      .finally(() => setLoading(false));
   }, []);
 
   // ── Save profile + timer ───────────────────────────────────────────────────
   const handleSave = async () => {
     setSaveError('');
     const payload = {
-      profile: { ...profile, studyGoal: Number(profile.studyGoal) },
+      profile:  { bio: profile.bio, studyGoal: Number(profile.studyGoal), name: profile.name },
       timer,
     };
     saveSettingsLocally({ profile, timer });
     try {
-      await updateSettingsApi(payload);
-      // Sync name to localStorage user object
+      await apiFetch('/api/settings', { method: 'PUT', body: JSON.stringify(payload) });
+      // Sync name to localStorage user object if changed
       try {
         const stored = JSON.parse(localStorage.getItem('user') || '{}');
         if (stored.name !== profile.name)
@@ -337,13 +337,18 @@ export function Settings() {
     }
   };
 
-  // ── Change password ────────────────────────────────────────────────────────
+  // ── Change / Set password ──────────────────────────────────────────────────
   const handleChangePassword = async () => {
     const { current, newPw, confirm } = pwFields;
+    const isSettingNew = profile.isGoogleAccount && !profile.hasPassword;
 
-    // Client-side validation first
-    if (!current || !newPw || !confirm) {
-      setPwStatus({ loading: false, error: 'All fields are required.', success: '' });
+    // Client-side validation
+    if (!isSettingNew && !current) {
+      setPwStatus({ loading: false, error: 'Current password is required.', success: '' });
+      return;
+    }
+    if (!newPw || !confirm) {
+      setPwStatus({ loading: false, error: 'Please fill in all password fields.', success: '' });
       return;
     }
     if (newPw !== confirm) {
@@ -361,12 +366,17 @@ export function Settings() {
 
     setPwStatus({ loading: true, error: '', success: '' });
     try {
-      const res = await changePasswordApi({
-        currentPassword: current,
-        newPassword:     newPw,
-        confirmPassword: confirm,
+      const res = await apiFetch('/api/settings/change-password', {
+        method: 'POST',
+        body: JSON.stringify({
+          currentPassword: current,
+          newPassword:     newPw,
+          confirmPassword: confirm,
+        }),
       });
       setPwFields({ current: '', newPw: '', confirm: '' });
+      // After setting password for a Google account, update local flag
+      if (isSettingNew) setProfile(p => ({ ...p, hasPassword: true }));
       setPwStatus({ loading: false, error: '', success: res.message || 'Password updated successfully.' });
       setTimeout(() => setPwStatus(s => ({ ...s, success: '' })), 4000);
     } catch (err) {
@@ -377,7 +387,7 @@ export function Settings() {
   // ── Delete account ─────────────────────────────────────────────────────────
   const handleDeleteAccount = async () => {
     try {
-      await deleteAccountApi();
+      await apiFetch('/api/auth/delete-account', { method: 'DELETE' });
       localStorage.removeItem('token');
       localStorage.removeItem('user');
       localStorage.removeItem(LS_SETTINGS_KEY);
@@ -410,27 +420,7 @@ export function Settings() {
               style={{ background: colors.card2, border: `1px solid ${colors.border}` }}
             >
               <div className="relative">
-                {profile.avatar
-                  ? (
-                    <img
-                      src={profile.avatar}
-                      alt="Avatar"
-                      className="w-16 h-16 rounded-2xl object-cover"
-                      style={{ boxShadow: `0 0 20px rgba(${accent.rgb},0.3)` }}
-                    />
-                  ) : (
-                    <div
-                      className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl text-white"
-                      style={{
-                        fontWeight: 800,
-                        background: `linear-gradient(135deg, ${accent.main}, ${accent.light})`,
-                        boxShadow:  `0 0 20px rgba(${accent.rgb},0.4)`,
-                      }}
-                    >
-                      {getInitials(profile.name)}
-                    </div>
-                  )
-                }
+                <Avatar name={profile.name} avatarUrl={profile.avatar} accent={accent} />
                 <div
                   className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center"
                   style={{ background: '#22c55e', border: `2px solid ${colors.bg}` }}
@@ -443,45 +433,45 @@ export function Settings() {
                   {profile.name || 'Your Name'}
                 </div>
                 <div className="text-sm" style={{ color: accent.main }}>{profile.email}</div>
+                {profile.isGoogleAccount && (
+                  <div
+                    className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-xs"
+                    style={{ background: 'rgba(66,133,244,0.12)', border: '1px solid rgba(66,133,244,0.3)', color: '#4285f4' }}
+                  >
+                    <svg className="w-2.5 h-2.5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                    Google Account
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <InputField
-                label="Full Name"
-                value={profile.name}
-                onChange={v => setProfile({ ...profile, name: v })}
-                inputStyle={inputStyle}
-                colors={colors}
-              />
-              <InputField
-                label="Email Address"
-                type="email"
-                value={profile.email}
-                onChange={() => {}}
-                inputStyle={inputStyle}
-                colors={colors}
-                disabled={true}
-                placeholder="Email cannot be changed here"
-              />
-              <div className="col-span-full">
-                <label className="block text-xs mb-1.5" style={{ fontWeight: 500, color: colors.textSub }}>
-                  Timezone
-                </label>
-                <select
+              <div>
+                <label className="block text-xs mb-1.5" style={{ fontWeight: 500, color: colors.textSub }}>Full Name</label>
+                <input
+                  type="text"
                   className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
                   style={inputStyle}
-                  value={profile.timezone}
-                  onChange={e => setProfile({ ...profile, timezone: e.target.value })}
-                >
-                  <option value="Asia/Manila">Philippine Time (UTC+8)</option>
-                  <option value="America/New_York">Eastern Time (UTC-5)</option>
-                  <option value="America/Chicago">Central Time (UTC-6)</option>
-                  <option value="America/Los_Angeles">Pacific Time (UTC-8)</option>
-                  <option value="Europe/London">London (UTC+0)</option>
-                  <option value="Asia/Tokyo">Tokyo (UTC+9)</option>
-                </select>
+                  value={profile.name}
+                  onChange={e => setProfile({ ...profile, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-xs mb-1.5" style={{ fontWeight: 500, color: colors.textSub }}>Email Address</label>
+                <input
+                  type="email"
+                  className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
+                  style={{ ...inputStyle, opacity: 0.55, cursor: 'not-allowed' }}
+                  value={profile.email}
+                  disabled
+                />
+                <p className="text-xs mt-1" style={{ color: colors.textMuted }}>Email cannot be changed here.</p>
               </div>
               <div className="col-span-full">
                 <label className="block text-xs mb-1.5" style={{ fontWeight: 500, color: colors.textSub }}>Bio</label>
@@ -493,9 +483,7 @@ export function Settings() {
                 />
               </div>
               <div>
-                <label className="block text-xs mb-1.5" style={{ fontWeight: 500, color: colors.textSub }}>
-                  Daily Study Goal (hours)
-                </label>
+                <label className="block text-xs mb-1.5" style={{ fontWeight: 500, color: colors.textSub }}>Daily Study Goal (hours)</label>
                 <input
                   type="number" min="1" max="16"
                   className="w-full px-3 py-2.5 rounded-xl text-sm outline-none"
@@ -534,7 +522,7 @@ export function Settings() {
                       <input
                         type="number" min="1"
                         className="text-2xl bg-transparent border-none outline-none text-center"
-                        style={{ fontWeight: 700, color: t.color, width: '3rem' }}
+                        style={{ fontWeight: 700, color: t.color, width: '3.5rem' }}
                         value={timer[t.key]}
                         onChange={e => setTimer({ ...timer, [t.key]: e.target.value })}
                       />
@@ -549,12 +537,13 @@ export function Settings() {
                 </div>
               ))}
             </div>
+
+            {/* Timer toggles — notifyOnComplete REMOVED */}
             <div className="space-y-3">
               {[
-                { key: 'autoStartBreaks',   label: 'Auto-start Breaks',             desc: 'Automatically start break timer after focus session' },
-                { key: 'autoStartSessions', label: 'Auto-start Sessions',           desc: 'Automatically start next session after break'        },
-                { key: 'soundEnabled',      label: 'Timer Sounds',                  desc: 'Play sound when timer completes'                     },
-                { key: 'notifyOnComplete',  label: 'Session Complete Notification', desc: 'Show notification when a session ends'               },
+                { key: 'autoStartBreaks',   label: 'Auto-start Breaks',   desc: 'Automatically start break timer after focus session' },
+                { key: 'autoStartSessions', label: 'Auto-start Sessions', desc: 'Automatically start next session after break'        },
+                { key: 'soundEnabled',      label: 'Timer Sounds',        desc: 'Play sound when timer completes'                     },
               ].map(s => (
                 <div
                   key={s.key}
@@ -591,11 +580,7 @@ export function Settings() {
                       key={id}
                       onClick={() => setTheme(id)}
                       className="relative p-4 rounded-2xl text-left transition-all"
-                      style={{
-                        background:  card,
-                        border:      `2px solid ${isActive ? accent.main : pb}`,
-                        boxShadow:   isActive ? `0 0 16px rgba(${accent.rgb},0.25)` : 'none',
-                      }}
+                      style={{ background: card, border: `2px solid ${isActive ? accent.main : pb}`, boxShadow: isActive ? `0 0 16px rgba(${accent.rgb},0.25)` : 'none' }}
                     >
                       <div className="rounded-xl overflow-hidden mb-3" style={{ background: bg, border: `1px solid ${pb}` }}>
                         <div className="flex gap-1 p-2" style={{ background: card, borderBottom: `1px solid ${pb}` }}>
@@ -636,10 +621,10 @@ export function Settings() {
                     title={name}
                     className="relative w-9 h-9 rounded-full flex items-center justify-center"
                     style={{
-                      background:  pal.main,
-                      boxShadow:   accentColor === name ? `0 0 0 2px ${colors.bg}, 0 0 0 4px ${pal.main}` : 'none',
-                      transform:   accentColor === name ? 'scale(1.18)' : 'scale(1)',
-                      transition:  'transform 200ms, box-shadow 200ms',
+                      background: pal.main,
+                      boxShadow:  accentColor === name ? `0 0 0 2px ${colors.bg}, 0 0 0 4px ${pal.main}` : 'none',
+                      transform:  accentColor === name ? 'scale(1.18)' : 'scale(1)',
+                      transition: 'transform 200ms, box-shadow 200ms',
                     }}
                   >
                     {accentColor === name && <Check className="w-4 h-4 text-white" strokeWidth={3} />}
@@ -679,100 +664,107 @@ export function Settings() {
               <div className="flex items-center gap-3 flex-wrap">
                 <button
                   className="px-4 py-2 rounded-xl text-white text-sm"
-                  style={{
-                    background: `linear-gradient(135deg, ${accent.main}, ${accent.light})`,
-                    boxShadow:  `0 0 16px rgba(${accent.rgb},0.35)`,
-                    fontWeight: 600,
-                    border: 'none',
-                  }}
+                  style={{ background: `linear-gradient(135deg, ${accent.main}, ${accent.light})`, boxShadow: `0 0 16px rgba(${accent.rgb},0.35)`, fontWeight: 600, border: 'none' }}
                 >
                   Primary Button
                 </button>
-                <div
-                  className="px-3 py-1.5 rounded-lg text-sm"
-                  style={{
-                    background: `rgba(${accent.rgb},0.15)`,
-                    border:     `1px solid rgba(${accent.rgb},0.3)`,
-                    color:      accent.main,
-                    fontWeight: 500,
-                  }}
-                >
+                <div className="px-3 py-1.5 rounded-lg text-sm"
+                  style={{ background: `rgba(${accent.rgb},0.15)`, border: `1px solid rgba(${accent.rgb},0.3)`, color: accent.main, fontWeight: 500 }}>
                   Badge
                 </div>
                 <div className="flex-1 min-w-[120px]">
                   <div className="h-2 rounded-full" style={{ background: colors.border }}>
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: '62%', background: `linear-gradient(90deg, ${accent.main}, ${accent.light})` }}
-                    />
+                    <div className="h-full rounded-full" style={{ width: '62%', background: `linear-gradient(90deg, ${accent.main}, ${accent.light})` }} />
                   </div>
                   <div className="text-xs mt-1" style={{ color: colors.textMuted }}>XP Progress · 62%</div>
                 </div>
               </div>
             </div>
             <p className="text-xs px-1" style={{ color: colors.textMuted }}>
-              ✓ All appearance changes are applied instantly and saved automatically.
+              ✓ All appearance changes are applied instantly and saved to your account.
             </p>
           </div>
         );
 
       // ── Privacy & Data ─────────────────────────────────────────────────────
-      case 'privacy':
+      case 'privacy': {
+        const isGoogleOnly      = profile.isGoogleAccount && !profile.hasPassword;
+        const isSettingPassword = isGoogleOnly;
+
         return (
           <div className="space-y-4">
-            {/* Change Password */}
+            {/* Password section */}
             <div className="p-5 rounded-2xl" style={{ background: colors.card2, border: `1px solid ${colors.border}` }}>
-              <h4 className="text-sm mb-4" style={{ fontWeight: 600, color: colors.text }}>Change Password</h4>
-              <div className="space-y-3">
-                <PasswordField
-                  label="Current Password"
-                  value={pwFields.current}
-                  onChange={v => setPwFields({ ...pwFields, current: v })}
-                  placeholder="Enter your current password"
-                  inputStyle={inputStyle}
-                  colors={colors}
-                />
-                <PasswordField
-                  label="New Password"
-                  value={pwFields.newPw}
-                  onChange={v => setPwFields({ ...pwFields, newPw: v })}
-                  placeholder="Min. 8 chars, uppercase, lowercase, number"
-                  inputStyle={inputStyle}
-                  colors={colors}
-                />
-                <PasswordField
-                  label="Confirm New Password"
-                  value={pwFields.confirm}
-                  onChange={v => setPwFields({ ...pwFields, confirm: v })}
-                  placeholder="Repeat new password"
-                  inputStyle={inputStyle}
-                  colors={colors}
-                />
-                <AlertBox type="error"   message={pwStatus.error}   />
-                <AlertBox type="success" message={pwStatus.success} />
-                <button
-                  onClick={handleChangePassword}
-                  disabled={pwStatus.loading}
-                  className="px-5 py-2.5 rounded-xl text-white text-sm"
-                  style={{
-                    background: pwStatus.loading
-                      ? `rgba(${accent.rgb},0.4)`
-                      : `linear-gradient(135deg, ${accent.main}, ${accent.light})`,
-                    fontWeight: 600,
-                    cursor:     pwStatus.loading ? 'not-allowed' : 'pointer',
-                    border:     'none',
-                  }}
-                >
-                  {pwStatus.loading ? 'Updating…' : 'Update Password'}
-                </button>
-              </div>
+
+              {/* Google-only account — setting password for the first time */}
+              {isSettingPassword ? (
+                <>
+                  <div className="flex items-center gap-2 mb-3">
+                    <KeyRound className="w-4 h-4" style={{ color: accent.main }} />
+                    <h4 className="text-sm" style={{ fontWeight: 600, color: colors.text }}>Set a Password</h4>
+                  </div>
+                  <div
+                    className="flex items-start gap-3 p-3 rounded-xl mb-4"
+                    style={{ background: 'rgba(66,133,244,0.08)', border: '1px solid rgba(66,133,244,0.2)' }}
+                  >
+                    <svg className="w-4 h-4 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="#4285f4">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                    </svg>
+                    <p className="text-xs" style={{ color: '#4285f4', lineHeight: 1.6 }}>
+                      Your account uses <strong>Google Sign-In</strong> and has no local password yet.
+                      You can optionally set a password so you can also sign in with your email.
+                    </p>
+                  </div>
+                  <div className="space-y-3">
+                    <PasswordField label="New Password"         value={pwFields.newPw}   onChange={v => setPwFields({ ...pwFields, newPw: v })}   placeholder="Min. 8 chars, uppercase, lowercase, number" inputStyle={inputStyle} colors={colors} />
+                    <PasswordField label="Confirm New Password" value={pwFields.confirm}  onChange={v => setPwFields({ ...pwFields, confirm: v })}  placeholder="Repeat new password"                       inputStyle={inputStyle} colors={colors} />
+                    <AlertBox type="error"   message={pwStatus.error}   />
+                    <AlertBox type="success" message={pwStatus.success} />
+                    <button
+                      onClick={handleChangePassword}
+                      disabled={pwStatus.loading}
+                      className="px-5 py-2.5 rounded-xl text-white text-sm"
+                      style={{
+                        background: pwStatus.loading ? `rgba(${accent.rgb},0.4)` : `linear-gradient(135deg, ${accent.main}, ${accent.light})`,
+                        fontWeight: 600,
+                        cursor:     pwStatus.loading ? 'not-allowed' : 'pointer',
+                        border:     'none',
+                      }}
+                    >
+                      {pwStatus.loading ? 'Setting…' : 'Set Password'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                /* Normal account (or Google account that already has a password) */
+                <>
+                  <h4 className="text-sm mb-4" style={{ fontWeight: 600, color: colors.text }}>Change Password</h4>
+                  <div className="space-y-3">
+                    <PasswordField label="Current Password"     value={pwFields.current}  onChange={v => setPwFields({ ...pwFields, current: v })}  placeholder="Enter your current password"                inputStyle={inputStyle} colors={colors} />
+                    <PasswordField label="New Password"         value={pwFields.newPw}   onChange={v => setPwFields({ ...pwFields, newPw: v })}   placeholder="Min. 8 chars, uppercase, lowercase, number" inputStyle={inputStyle} colors={colors} />
+                    <PasswordField label="Confirm New Password" value={pwFields.confirm}  onChange={v => setPwFields({ ...pwFields, confirm: v })}  placeholder="Repeat new password"                       inputStyle={inputStyle} colors={colors} />
+                    <AlertBox type="error"   message={pwStatus.error}   />
+                    <AlertBox type="success" message={pwStatus.success} />
+                    <button
+                      onClick={handleChangePassword}
+                      disabled={pwStatus.loading}
+                      className="px-5 py-2.5 rounded-xl text-white text-sm"
+                      style={{
+                        background: pwStatus.loading ? `rgba(${accent.rgb},0.4)` : `linear-gradient(135deg, ${accent.main}, ${accent.light})`,
+                        fontWeight: 600,
+                        cursor:     pwStatus.loading ? 'not-allowed' : 'pointer',
+                        border:     'none',
+                      }}
+                    >
+                      {pwStatus.loading ? 'Updating…' : 'Update Password'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
 
             {/* Danger Zone */}
-            <div
-              className="p-5 rounded-2xl"
-              style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}
-            >
+            <div className="p-5 rounded-2xl" style={{ background: 'rgba(239,68,68,0.06)', border: '1px solid rgba(239,68,68,0.2)' }}>
               <h4 className="text-red-400 text-sm mb-2" style={{ fontWeight: 600 }}>Danger Zone</h4>
               <p className="text-xs mb-4" style={{ color: colors.textMuted }}>
                 These actions are permanent and cannot be undone. Proceed with caution.
@@ -781,13 +773,8 @@ export function Settings() {
               {deleteError && <div className="mb-3" />}
               <button
                 onClick={() => { setDeleteError(''); setShowDeleteModal(true); }}
-                className="px-4 py-2 rounded-xl text-red-400 text-sm transition-colors"
-                style={{
-                  border:     '1px solid rgba(239,68,68,0.3)',
-                  fontWeight: 500,
-                  background: 'none',
-                  cursor:     'pointer',
-                }}
+                className="px-4 py-2 rounded-xl text-red-400 text-sm"
+                style={{ border: '1px solid rgba(239,68,68,0.3)', fontWeight: 500, background: 'none', cursor: 'pointer' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'rgba(239,68,68,0.1)'}
                 onMouseLeave={e => e.currentTarget.style.background = 'none'}
               >
@@ -796,6 +783,7 @@ export function Settings() {
             </div>
           </div>
         );
+      }
 
       default:
         return null;
@@ -805,7 +793,6 @@ export function Settings() {
   // ── Layout ─────────────────────────────────────────────────────────────────
   return (
     <div className="p-4 min-h-full" style={{ background: colors.bg }}>
-      {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <DeleteModal
           onConfirm={handleDeleteAccount}
@@ -814,7 +801,6 @@ export function Settings() {
         />
       )}
 
-      {/* Page header */}
       <div className="mb-5">
         <h1 className="text-2xl" style={{ fontWeight: 700, letterSpacing: '-0.4px', color: colors.text }}>Settings</h1>
         <p className="text-sm mt-0.5" style={{ color: colors.textSub }}>Manage your account and preferences</p>
@@ -831,11 +817,9 @@ export function Settings() {
                 key={s.id}
                 onClick={() => setActiveSection(s.id)}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all"
-                style={
-                  isActive
-                    ? { background: `rgba(${accent.rgb},0.12)`, border: `1px solid rgba(${accent.rgb},0.3)` }
-                    : { background: colors.card, border: `1px solid ${colors.border}` }
-                }
+                style={isActive
+                  ? { background: `rgba(${accent.rgb},0.12)`, border: `1px solid rgba(${accent.rgb},0.3)` }
+                  : { background: colors.card, border: `1px solid ${colors.border}` }}
               >
                 <Icon className="w-4 h-4 flex-shrink-0" style={{ color: isActive ? accent.main : colors.textMuted }} />
                 <div>
@@ -868,24 +852,20 @@ export function Settings() {
                 onClick={handleSave}
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-white text-sm hover:opacity-90"
                 style={{
-                  background:  `linear-gradient(135deg, ${accent.main}, ${accent.light})`,
-                  fontWeight:  600,
-                  boxShadow:   `0 0 20px rgba(${accent.rgb},0.3)`,
-                  border:      'none',
-                  cursor:      'pointer',
+                  background: `linear-gradient(135deg, ${accent.main}, ${accent.light})`,
+                  fontWeight: 600,
+                  boxShadow:  `0 0 20px rgba(${accent.rgb},0.3)`,
+                  border:     'none',
+                  cursor:     'pointer',
                 }}
               >
                 {saved && <Check className="w-4 h-4" />}
                 {saved ? 'Saved!' : 'Save Changes'}
               </button>
-              {saveError && (
-                <span className="text-xs" style={{ color: '#f87171' }}>{saveError}</span>
-              )}
-              {!saveError && (
-                <p className="text-xs" style={{ color: colors.textMuted }}>
-                  Saves to your account and syncs across devices.
-                </p>
-              )}
+              {saveError
+                ? <span className="text-xs" style={{ color: '#f87171' }}>{saveError}</span>
+                : <p className="text-xs" style={{ color: colors.textMuted }}>Saves to your account and syncs across devices.</p>
+              }
             </div>
           )}
         </div>

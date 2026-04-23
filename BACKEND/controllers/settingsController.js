@@ -4,16 +4,22 @@ import UserSettings from '../models/UserSettings.js';
 // ── GET /api/settings ─────────────────────────────────────────────────────────
 export const getSettings = async (req, res) => {
   try {
-    const user     = req.user;
+    // Fetch user WITH password field so we can detect Google-only accounts
+    const user     = await User.findById(req.user._id).select('+password');
     const settings = await UserSettings.findOne({ userId: user._id });
+
+    const isGoogleOnly = !!user.googleId && !user.password;
+    const hasPassword  = !!user.password;
 
     const profile = {
       name:      user.name,
       email:     user.email,
       avatar:    user.avatar || null,
       bio:       settings?.profile?.bio       ?? '',
-      timezone:  settings?.profile?.timezone  ?? 'Asia/Manila',
       studyGoal: settings?.profile?.studyGoal ?? 4,
+      // Account type flags — used by frontend to handle password section correctly
+      isGoogleAccount: isGoogleOnly,
+      hasPassword:     hasPassword,
     };
 
     const notifs = settings?.notifs ?? {
@@ -35,7 +41,6 @@ export const getSettings = async (req, res) => {
       autoStartBreaks:    true,
       autoStartSessions:  false,
       soundEnabled:       true,
-      notifyOnComplete:   true,
     };
 
     const appearance = settings?.appearance ?? {
@@ -71,7 +76,12 @@ export const updateSettings = async (req, res) => {
 
     // Build the update object — only include fields that were sent
     const updateFields = {};
-    if (profile)    updateFields.profile    = { bio: profile.bio ?? '', timezone: profile.timezone ?? 'Asia/Manila', studyGoal: profile.studyGoal ?? 4 };
+    if (profile) {
+      updateFields.profile = {
+        bio:       profile.bio       ?? '',
+        studyGoal: profile.studyGoal ?? 4,
+      };
+    }
     if (notifs)     updateFields.notifs     = notifs;
     if (timer)      updateFields.timer      = timer;
     if (appearance) updateFields.appearance = appearance;
@@ -94,8 +104,8 @@ export const changePassword = async (req, res) => {
   try {
     const { currentPassword, newPassword, confirmPassword } = req.body;
 
-    if (!currentPassword || !newPassword || !confirmPassword)
-      return res.status(400).json({ error: 'All password fields are required.' });
+    if (!newPassword || !confirmPassword)
+      return res.status(400).json({ error: 'New password and confirmation are required.' });
 
     if (newPassword !== confirmPassword)
       return res.status(400).json({ error: 'New passwords do not match.' });
@@ -108,8 +118,18 @@ export const changePassword = async (req, res) => {
 
     const user = await User.findById(req.user._id).select('+password');
 
-    if (!user.password)
-      return res.status(400).json({ error: 'This account uses Google sign-in and has no password to change.' });
+    const isGoogleOnly = !!user.googleId && !user.password;
+
+    if (isGoogleOnly) {
+      // Google-only account — setting a password for the first time, no current password needed
+      user.password = newPassword;
+      await user.save();
+      return res.json({ message: 'Password set successfully. You can now also sign in with your email and password.' });
+    }
+
+    // Normal account — validate current password
+    if (!currentPassword)
+      return res.status(400).json({ error: 'Current password is required.' });
 
     const isMatch = await user.comparePassword(currentPassword);
     if (!isMatch)

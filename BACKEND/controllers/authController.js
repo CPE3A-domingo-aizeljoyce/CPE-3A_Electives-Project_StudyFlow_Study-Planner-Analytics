@@ -452,31 +452,49 @@ export const getMe = async (req, res) => {
 
 // ── DELETE /api/auth/delete-account ──────────────────────────────────────────
 export const deleteAccount = async (req, res) => {
+  const userId = req.user._id;
+  const step   = { name: 'init' };   // tracks which step failed
+
   try {
-    const userId = req.user._id;
+    console.log('[deleteAccount] ▶ Starting for userId:', userId.toString());
 
-    // Cascade delete — remove all data owned by this user
-    // Note: UserSettings uses 'userId' field; all other models use 'user'
-    await Promise.all([
-      StudySession .deleteMany({ user:   userId }),
-      Task         .deleteMany({ user:   userId }),
-      Goal         .deleteMany({ user:   userId }),
-      Note         .deleteMany({ user:   userId }),
-      Achievement  .deleteMany({ user:   userId }),
-      UserSettings .deleteMany({ userId: userId }),
-    ]);
+    step.name = 'StudySession';
+    const r1 = await StudySession.deleteMany({ user: userId });
+    console.log('[deleteAccount] ✓ StudySessions deleted:', r1.deletedCount);
 
-    // Delete the user account itself
+    step.name = 'Task';
+    const r2 = await Task.deleteMany({ user: userId });
+    console.log('[deleteAccount] ✓ Tasks deleted:', r2.deletedCount);
+
+    step.name = 'Goal';
+    const r3 = await Goal.deleteMany({ user: userId });
+    console.log('[deleteAccount] ✓ Goals deleted:', r3.deletedCount);
+
+    step.name = 'Note';
+    const r4 = await Note.deleteMany({ user: userId });
+    console.log('[deleteAccount] ✓ Notes deleted:', r4.deletedCount);
+
+    step.name = 'Achievement';
+    const r5 = await Achievement.deleteMany({ user: userId });
+    console.log('[deleteAccount] ✓ Achievements deleted:', r5.deletedCount);
+
+    step.name = 'UserSettings';
+    const r6 = await UserSettings.deleteMany({ userId: userId });
+    console.log('[deleteAccount] ✓ UserSettings deleted:', r6.deletedCount);
+
+    step.name = 'User';
     await User.findByIdAndDelete(userId);
+    console.log('[deleteAccount] ✓ User account deleted');
 
-    res.status(200).json({ message: 'Account and all associated data have been deleted.' });
+    console.log('[deleteAccount] ✅ All data deleted successfully for:', userId.toString());
+    return res.status(200).json({ message: 'Account and all associated data have been deleted.' });
 
   } catch (err) {
-    console.error('Delete account error:', err);
-    // Return the real error message so it's visible during debugging
-    res.status(500).json({
-      message: 'Server error. Could not delete account.',
+    console.error(`[deleteAccount] ✗ FAILED at step "${step.name}":`, err);
+    return res.status(500).json({
+      message: `Server error at step "${step.name}". Could not delete account.`,
       detail:  err.message,
+      step:    step.name,
     });
   }
 };

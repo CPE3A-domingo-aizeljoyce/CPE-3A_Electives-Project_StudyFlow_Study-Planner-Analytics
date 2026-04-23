@@ -1,16 +1,35 @@
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+// ── Response handler — preserves ALL backend fields (message, detail, step, etc.) ──
 const handleResponse = async (res) => {
   const data = await res.json();
-  if (!res.ok) throw { message: data.message, requiresVerification: data.requiresVerification };
+  if (!res.ok) {
+    const err = new Error(data.message || 'Request failed.');
+    err.detail  = data.detail  || null;
+    err.step    = data.step    || null;
+    err.status  = res.status;
+    err.requiresVerification = data.requiresVerification || false;
+    err.isGoogleSignIn       = data.isGoogleSignIn       || false;
+    err.isGoogleAccount      = data.isGoogleAccount      || false;
+    throw err;
+  }
   return data;
+};
+
+// ── Auth headers helper ────────────────────────────────────────────────────────
+const authHeaders = (withBody = false) => {
+  const token = localStorage.getItem('token');
+  const headers = {};
+  if (withBody) headers['Content-Type'] = 'application/json';
+  if (token)   headers['Authorization'] = `Bearer ${token}`;
+  return headers;
 };
 
 // POST /api/auth/register
 export const registerUser = async ({ name, email, password }) => {
   const res = await fetch(`${BASE_URL}/api/auth/register`, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(true),
     body:    JSON.stringify({ name, email, password }),
   });
   return handleResponse(res);
@@ -20,7 +39,7 @@ export const registerUser = async ({ name, email, password }) => {
 export const loginUser = async ({ email, password }) => {
   const res = await fetch(`${BASE_URL}/api/auth/login`, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(true),
     body:    JSON.stringify({ email, password }),
   });
   return handleResponse(res);
@@ -30,7 +49,7 @@ export const loginUser = async ({ email, password }) => {
 export const googleAuthApi = async (access_token) => {
   const res = await fetch(`${BASE_URL}/api/auth/google`, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(true),
     body:    JSON.stringify({ access_token }),
   });
   return handleResponse(res);
@@ -40,7 +59,7 @@ export const googleAuthApi = async (access_token) => {
 export const forgotPasswordApi = async (email) => {
   const res = await fetch(`${BASE_URL}/api/auth/forgot-password`, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(true),
     body:    JSON.stringify({ email }),
   });
   return handleResponse(res);
@@ -50,7 +69,7 @@ export const forgotPasswordApi = async (email) => {
 export const resetPasswordApi = async ({ token, password }) => {
   const res = await fetch(`${BASE_URL}/api/auth/reset-password`, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(true),
     body:    JSON.stringify({ token, password }),
   });
   return handleResponse(res);
@@ -61,7 +80,7 @@ export const getMe = async () => {
   const token = localStorage.getItem('token');
   if (!token) throw new Error('No token found.');
   const res = await fetch(`${BASE_URL}/api/auth/me`, {
-    headers: { Authorization: `Bearer ${token}` },
+    headers: authHeaders(),
   });
   return handleResponse(res);
 };
@@ -72,15 +91,7 @@ export const logoutUser = () => {
   localStorage.removeItem('user');
 };
 
-// ── Settings API ──────────────────────────────────────────────────────────────
-
-const authHeaders = () => {
-  const token = localStorage.getItem('token');
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-};
+// ── Settings API ───────────────────────────────────────────────────────────────
 
 // GET /api/settings
 export const getSettingsApi = async () => {
@@ -94,7 +105,7 @@ export const getSettingsApi = async () => {
 export const updateSettingsApi = async (payload) => {
   const res = await fetch(`${BASE_URL}/api/settings`, {
     method:  'PUT',
-    headers: authHeaders(),
+    headers: authHeaders(true),
     body:    JSON.stringify(payload),
   });
   return handleResponse(res);
@@ -104,7 +115,7 @@ export const updateSettingsApi = async (payload) => {
 export const changePasswordApi = async ({ currentPassword, newPassword, confirmPassword }) => {
   const res = await fetch(`${BASE_URL}/api/settings/change-password`, {
     method:  'POST',
-    headers: authHeaders(),
+    headers: authHeaders(true),
     body:    JSON.stringify({ currentPassword, newPassword, confirmPassword }),
   });
   return handleResponse(res);
@@ -114,7 +125,7 @@ export const changePasswordApi = async ({ currentPassword, newPassword, confirmP
 export const deleteAccountApi = async () => {
   const res = await fetch(`${BASE_URL}/api/auth/delete-account`, {
     method:  'DELETE',
-    headers: authHeaders(),
+    headers: authHeaders(),   // no body needed, no Content-Type needed
   });
   return handleResponse(res);
 };

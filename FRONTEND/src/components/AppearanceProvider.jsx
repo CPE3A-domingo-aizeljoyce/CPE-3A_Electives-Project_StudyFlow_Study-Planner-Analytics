@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef } from 'react';
 
+// ── Accent palette ────────────────────────────────────────────────────────────
 export const ACCENT_PALETTE = {
   indigo: { main: '#6366f1', light: '#8b5cf6', rgb: '99,102,241'  },
   blue:   { main: '#3b82f6', light: '#60a5fa', rgb: '59,130,246'  },
@@ -9,6 +10,7 @@ export const ACCENT_PALETTE = {
   rose:   { main: '#f43f5e', light: '#fb7185', rgb: '244,63,94'   },
 };
 
+// ── Color palettes ────────────────────────────────────────────────────────────
 const DARK = {
   bg: '#0d1117', card: '#131929', card2: '#0f1626', border: '#1a2540',
   sidebar: '#0f1626', text: '#e2e8f0', textSub: '#94a3b8', textMuted: '#64748b',
@@ -23,7 +25,8 @@ const LIGHT = {
   tooltipBg: '#ffffff', tooltipBorder: '#e2e8f0', inputScheme: 'light',
 };
 
-const LS_KEY  = 'sf_appearance';
+// ── Constants ─────────────────────────────────────────────────────────────────
+const LS_KEY   = 'sf_appearance';
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const defaultState = {
@@ -35,8 +38,10 @@ const defaultState = {
   showStreak:  true,
 };
 
-// Load from localStorage immediately — prevents theme flash on page load
-function loadState() {
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Read cached appearance from localStorage (used for instant, flicker-free initial render) */
+function loadFromLocalStorage() {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (raw) return { ...defaultState, ...JSON.parse(raw) };
@@ -44,6 +49,7 @@ function loadState() {
   return defaultState;
 }
 
+/** Apply appearance values to the DOM immediately (CSS variables + class names) */
 function applyToDOM(state) {
   const pal  = ACCENT_PALETTE[state.accentColor] ?? ACCENT_PALETTE.indigo;
   const cols = state.theme === 'dark' ? DARK : LIGHT;
@@ -74,87 +80,138 @@ function applyToDOM(state) {
   else                   root.removeAttribute('data-no-anim');
 }
 
+/**
+ * Fetch the user's saved appearance from the backend.
+ * Returns null if not logged in, on error, or if no appearance data found.
+ */
+async function fetchAppearanceFromBackend() {
+  const token = localStorage.getItem('token');
+  if (!token) return null;     // not logged in — skip silently
+
+  try {
+    const res = await fetch(`${BASE_URL}/api/settings`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.appearance ?? null;
+  } catch (err) {
+    // Network error, backend down, etc. — graceful fallback
+    console.warn('[AppearanceProvider] Could not load from backend:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Save the current appearance state to the backend (database).
+ * Fire-and-forget — errors are logged but never thrown.
+ */
+async function saveAppearanceToBackend(appearance) {
+  const token = localStorage.getItem('token');
+  if (!token) return;     // not logged in — skip silently
+
+  try {
+    const res = await fetch(`${BASE_URL}/api/settings`, {
+      method:  'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization:  `Bearer ${token}`,
+      },
+      body: JSON.stringify({ appearance }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      console.warn('[AppearanceProvider] DB save failed:', err.error || err.message);
+    }
+  } catch (err) {
+    console.warn('[AppearanceProvider] DB save network error:', err.message);
+  }
+}
+
+// ── Context ───────────────────────────────────────────────────────────────────
 const AppearanceCtx = createContext(null);
 
 export function AppearanceProvider({ children }) {
-  const [state, setState] = useState(loadState);
+  // Initialize from localStorage immediately — prevents any flash on first paint
+  const [state, setState] = useState(loadFromLocalStorage);
 
-  // Ref to skip saving back to server immediately after we load FROM the server
-  // (prevents unnecessary write right after a read)
-  const skipNextServerSave = useRef(false);
-  // Ref to skip the very first render's save effect
-  const isFirstRender = useRef(true);
+  /**
+   * isHydrating = true while the initial backend fetch is in flight.
+   * Prevents the "save to DB" effect from firing during the DB→state hydration,
+   * which would wastefully write back the same data we just loaded.
+   */
+  const isHydrating = useRef(true);
+  const saveTimer   = useRef(null);
 
-  // ── Apply to DOM + localStorage whenever state changes ─────────────────────
+  // ── Effect 1: Apply state to DOM + localStorage on every change ───────────
   useEffect(() => {
     applyToDOM(state);
     localStorage.setItem(LS_KEY, JSON.stringify(state));
   }, [state]);
 
-  // ── On mount: load appearance from server if user is logged in ──────────────
-  // This is the authoritative source — overrides localStorage with DB value
+  // ── Effect 2: On mount — fetch authoritative appearance from backend ───────
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-
-    fetch(`${BASE_URL}/api/settings`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (!data?.appearance) return;
-        const serverAppearance = data.appearance;
-        // Mark that the next state change is from server load, not user action
-        skipNextServerSave.current = true;
-        setState(prev => ({ ...prev, ...serverAppearance }));
+    fetchAppearanceFromBackend()
+      .then(dbData => {
+        if (dbData) {
+          // Merge with defaults to handle any missing fields from older DB records
+          const merged = { ...defaultState, ...dbData };
+          setState(merged);
+          // applyToDOM + localStorage are handled by Effect 1 above
+        }
       })
       .catch(() => {
-        // Silently fail — localStorage value stays applied
+        // Should not reach here (fetchAppearanceFromBackend never throws),
+        // but kept for safety
+      })
+      .finally(() => {
+        // Use setTimeout(0) to push this AFTER React has processed the setState
+        // above and run Effect 3 for the hydration re-render.
+        // This guarantees the hydration's state change does NOT trigger a DB save.
+        setTimeout(() => {
+          isHydrating.current = false;
+        }, 0);
       });
-  }, []); // ← runs only once on mount
 
-  // ── Save appearance to server whenever user changes it ─────────────────────
+    // Cleanup: cancel any pending save timer when component unmounts
+    return () => clearTimeout(saveTimer.current);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Effect 3: Save to backend when user changes a setting (debounced) ─────
   useEffect(() => {
-    // Skip the very first render
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    // Skip if this change came from a server load (not a user action)
-    if (skipNextServerSave.current) {
-      skipNextServerSave.current = false;
-      return;
-    }
+    // Skip during initial hydration (state loaded from DB, no need to re-save)
+    if (isHydrating.current) return;
 
-    const token = localStorage.getItem('token');
-    if (!token) return;
+    // Debounce: wait 600ms after last change before calling API.
+    // This prevents hammering the backend while the user is clicking
+    // through accent colors quickly.
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      saveAppearanceToBackend(state);
+    }, 600);
 
-    // Debounce — wait 700ms after last change before saving
-    const timer = setTimeout(() => {
-      fetch(`${BASE_URL}/api/settings`, {
-        method:  'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization:  `Bearer ${token}`,
-        },
-        body: JSON.stringify({ appearance: state }),
-      }).catch(() => {
-        // Silently fail — next save will catch up
-      });
-    }, 700);
+    // Cleanup: cancel pending save if state changes again before timer fires
+    return () => clearTimeout(saveTimer.current);
+  }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    return () => clearTimeout(timer);
-  }, [state]);
-
+  // ── Derived values ─────────────────────────────────────────────────────────
   const patch  = (partial) => setState(prev => ({ ...prev, ...partial }));
   const colors = state.theme === 'dark' ? DARK : LIGHT;
   const accent = ACCENT_PALETTE[state.accentColor] ?? ACCENT_PALETTE.indigo;
 
   return (
     <AppearanceCtx.Provider value={{
-      ...state,
+      // Raw state
+      theme:       state.theme,
+      accentColor: state.accentColor,
+      compactMode: state.compactMode,
+      animations:  state.animations,
+      showXPBar:   state.showXPBar,
+      showStreak:  state.showStreak,
+      // Derived
       colors,
       accent,
+      // Setters — each calls patch() which triggers Effect 3 (save to DB)
       setTheme:      (t) => patch({ theme: t }),
       setAccent:     (a) => patch({ accentColor: a }),
       setCompact:    (v) => patch({ compactMode: v }),
@@ -168,5 +225,7 @@ export function AppearanceProvider({ children }) {
 }
 
 export function useAppearance() {
-  return useContext(AppearanceCtx);
+  const ctx = useContext(AppearanceCtx);
+  if (!ctx) throw new Error('useAppearance must be used inside <AppearanceProvider>');
+  return ctx;
 }
