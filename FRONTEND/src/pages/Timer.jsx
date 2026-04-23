@@ -297,7 +297,13 @@ export function StudyTimer() {
         const session        = activeRes.data;
         const sessionMode    = session.mode || 'work';
         const currentCfg     = buildModeConfig(accent.main, accentGlow, loadSavedTimerSettings());
-        const targetDuration = currentCfg[sessionMode]?.duration || defaultModeConfig[sessionMode].duration;
+        let targetDuration   = currentCfg[sessionMode]?.duration || defaultModeConfig[sessionMode].duration;
+
+       
+        const lockedDuration = localStorage.getItem('sf_active_target_duration');
+        if (lockedDuration) {
+          targetDuration = parseInt(lockedDuration, 10);
+        }
 
         const now         = new Date();
         const wallElapsed = Math.floor((now - new Date(session.startTime)) / 1000);
@@ -372,6 +378,7 @@ export function StudyTimer() {
     }
 
     const targetDuration = targetConfig.duration;
+    localStorage.setItem('sf_active_target_duration', targetDuration.toString());
 
     setTimeLeft(targetDuration);
     setRunning(true); 
@@ -464,6 +471,9 @@ export function StudyTimer() {
 
     const sessionId   = activeSession._id;
     const sessionMode = activeSession.mode || mode;
+
+    localStorage.removeItem('sf_active_target_duration');
+
     setActiveSession(null);
     setRunning(false);
     setTimeLeft(modeConfig[sessionMode]?.duration || config.duration);
@@ -573,6 +583,9 @@ export function StudyTimer() {
   const executeAbandonSession = async () => {
     if (!activeSession) return;
     const sessionId = activeSession._id;
+
+    localStorage.removeItem('sf_active_target_duration');
+
     setRunning(false);
     setActiveSession(null);
     setTimeLeft(config.duration);
@@ -689,7 +702,15 @@ export function StudyTimer() {
               const saveSettings = (updated) => {
                 if (sessionLocked) return;
                 setTimerSettings(updated);
-                const payload = { profile: {}, timer: updated, notifs: {} };
+                
+                let existing = {};
+                try {
+                  const raw = localStorage.getItem(SETTINGS_KEY);
+                  if (raw) existing = JSON.parse(raw);
+                } catch(e) {}
+                
+                const payload = { ...existing, timer: { ...(existing.timer || {}), ...updated } };
+                
                 localStorage.setItem(SETTINGS_KEY, JSON.stringify(payload));
                 window.dispatchEvent(new CustomEvent('studyTimerSettingsUpdated', { detail: payload }));
                 setModeConfig(buildModeConfig(accent.main, accentGlow, updated));
@@ -923,8 +944,8 @@ export function StudyTimer() {
                   )}
                 </div>
                 <div className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
-  Long break every {timerSettings.sessionsBeforeLong} Focus sessions
-</div>
+                  Long break every {timerSettings.sessionsBeforeLong} Focus sessions
+                </div>
               </div>
               <div className="flex gap-1.5 flex-wrap">
                 {Array.from({ length: Math.min(sessionGoal, 12) }).map((_, i) => (
