@@ -1,15 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import {
   LayoutDashboard, ListTodo, Timer, BarChart2, Target, BookOpen, Trophy,
-  Flame, Zap, Clock, Star, AlertCircle, Award,
-  Bell, X, Brain, Settings, ChevronLeft, ChevronRight,
-  Check, CheckCheck, User, LogOut, Palette, Menu,
+  Flame, Zap, X, Brain, Settings, ChevronLeft, ChevronRight,
+  User, LogOut, Palette, Menu,
 } from 'lucide-react';
 import { useAppearance } from './AppearanceProvider';
 import { logoutUser } from '../api/authApi';
-import * as notificationApi from '../api/notificationApi.js';
-import { NotificationRefreshContext } from './NotificationRefreshContext';
+
+import { fetchAchievements } from '../api/achievementsApi';
 
 // ─── Reactive mobile-width hook ───────────────────────────────────────────────
 function useIsMobile(breakpoint = 640) {
@@ -23,10 +22,6 @@ function useIsMobile(breakpoint = 640) {
   }, [breakpoint]);
   return isMobile;
 }
-
-// ─── Hardcoded demo data ──────────────────────────────────────────────────────
-const DEMO_XP     = 2340;
-const DEMO_STREAK = 12;
 
 function getLevelInfo(xp) {
   const LEVEL_NAMES = [
@@ -54,16 +49,6 @@ const NAV_ITEMS = [
   { to: '/app/achievements', icon: Trophy,          label: 'Achievements'           },
 ];
 
-// ─── Icon mapping from string to lucide component ─────────────────────────────
-const ICON_MAP = {
-  Award: Award,
-  Flame: Flame,
-  Zap: Zap,
-  Clock: Clock,
-  Star: Star,
-  AlertCircle: AlertCircle,
-  Bell: Bell,
-};
 const SETTINGS_KEY = 'sf_settings';
 const defaultProfile = { name: 'Moran', username: 'mrnski' };
 
@@ -81,135 +66,45 @@ const getProfileInitials = (name) => {
   if (!name || !name.trim()) return '??';
   return name.split(' ').filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase();
 };
-// ─── Format relative time from database timestamp ─────────────────────────────
-function formatTimeAgo(timestamp) {
-  if (!timestamp) return 'just now';
-  const now = new Date();
-  const then = new Date(timestamp);
-  const diffMs = now - then;
-  const diffMins = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return then.toLocaleDateString();
-}
+// ─── Avatar circle — shows photo if available, falls back to gradient initials ─
+function AvatarCircle({ avatar, initials, size, accent, borderRadius = '50%', boxShadow }) {
+  const [failed, setFailed] = useState(false);
 
-// ─── Transform backend notification to UI format ───────────────────────────────
-function transformNotification(notif) {
-  return {
-    id: notif._id,
-    icon: ICON_MAP[notif.icon] || Bell,
-    color: notif.color || '#6366f1',
-    title: notif.title,
-    body: notif.body,
-    time: formatTimeAgo(notif.createdAt),
-    read: notif.read,
-  };
-}
+  // Reset failed flag whenever avatar src changes (new upload or removal)
+  useEffect(() => { setFailed(false); }, [avatar]);
 
-// ─── Notification Panel ───────────────────────────────────────────────────────
-function NotifPanel({ animations, notifs = [], onMarkRead, onMarkAllRead, onDelete, onClearAll, colors, accent, onClose }) {
-  const panelRef = useRef(null);
-  const isMobile = useIsMobile(640);
-
-  const unread = Array.isArray(notifs) ? notifs.filter(n => !n.read).length : 0;
-  const posStyle = isMobile
-    ? { top: 64, left: 8, right: 8, width: 'auto', maxWidth: '100%' }
-    : { bottom: 80, left: 'var(--notif-left, 16px)', width: 320, maxWidth: 'calc(100vw - var(--notif-left, 16px) - 16px)' };
-
-  useEffect(() => {
-    function handleClick(e) {
-      if (panelRef.current?.contains(e.target)) return;
-      if (e.target.closest('[data-notif-trigger]')) return;
-      onClose();
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [onClose]);
-
-  const markOne = (id) => onMarkRead(id);
-  const markAll = () => onMarkAllRead();
-  const dismiss = (id) => onDelete(id);
-  const clearAll = () => onClearAll();
+  const showImg = avatar && !failed;
 
   return (
     <div
-      ref={panelRef}
-      className={`fixed z-[9999] rounded-2xl flex flex-col overflow-hidden shadow-2xl ${animations ? 'animate-in fade-in slide-in-from-top-2' : ''}`}
-      style={{ ...posStyle, maxHeight: 460, background: colors.card, border: `1px solid ${colors.border}` }}
+      style={{
+        width: size, height: size, borderRadius,
+        flexShrink: 0, overflow: 'hidden',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontWeight: 700,
+        background: showImg
+          ? 'transparent'
+          : `linear-gradient(135deg, ${accent.main}, ${accent.light})`,
+        boxShadow,
+      }}
     >
-      <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" style={{ borderBottom: `1px solid ${colors.border}` }}>
-        <div className="flex items-center gap-2">
-          <Bell className="w-4 h-4" style={{ color: accent.main }} />
-          <span className="text-sm" style={{ fontWeight: 700, color: colors.text }}>Notifications</span>
-          {unread > 0 && (
-            <span className="text-xs px-2 py-0.5 rounded-full text-white" style={{ background: accent.main, fontWeight: 700 }}>{unread}</span>
-          )}
-        </div>
-        <div className="flex gap-1">
-          {unread > 0 && (
-            <button onClick={markAll} className="p-1.5 rounded-lg transition-colors" style={{ color: accent.main, background: `rgba(${accent.rgb},.1)` }}>
-              <CheckCheck className="w-3.5 h-3.5" />
-            </button>
-          )}
-          <button onClick={onClose} className="p-1.5 rounded-lg" style={{ color: colors.textMuted }}>
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-
-      <div className="flex-1 overflow-y-auto p-1.5">
-        {notifs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-10 text-center">
-            <div className="w-11 h-11 rounded-2xl flex items-center justify-center mb-3" style={{ background: `rgba(${accent.rgb},.1)` }}>
-              <Bell className="w-5 h-5 opacity-40" style={{ color: accent.main }} />
-            </div>
-            <p className="text-sm" style={{ fontWeight: 600, color: colors.textSub }}>All caught up!</p>
-            <p className="text-xs mt-1" style={{ color: colors.textMuted }}>No new notifications</p>
-          </div>
-        ) : notifs.map(n => {
-          const Icon = n.icon;
-          return (
-            <div key={n.id}
-              className="flex items-start gap-2.5 p-2.5 rounded-xl mb-1 cursor-pointer transition-colors group"
-              style={{ background: n.read ? 'transparent' : `rgba(${accent.rgb},.06)` }}
-              onClick={() => markOne(n.id)}
-            >
-              <div className="w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: `${n.color}20` }}>
-                <Icon className="w-4 h-4" style={{ color: n.color }} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs mb-0.5" style={{ fontWeight: 600, color: colors.text }}>{n.title}</p>
-                <p className="text-xs leading-relaxed" style={{ color: colors.textMuted }}>{n.body}</p>
-                <p className="text-xs mt-1" style={{ color: n.read ? colors.textMuted : accent.main, fontWeight: n.read ? 400 : 500 }}>{n.time}</p>
-              </div>
-              <button onClick={e => { e.stopPropagation(); dismiss(n.id); }}
-                className="opacity-0 group-hover:opacity-100 w-5 h-5 rounded-md flex items-center justify-center transition-all flex-shrink-0"
-                style={{ background: 'rgba(248,113,113,.15)', color: '#f87171' }}>
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          );
-        })}
-      </div>
-
-      {notifs.length > 0 && (
-        <div className="flex items-center justify-between px-4 py-2.5 flex-shrink-0" style={{ borderTop: `1px solid ${colors.border}` }}>
-          <button onClick={clearAll} className="text-xs" style={{ color: '#f87171', background: 'none', border: 'none', cursor: 'pointer' }}>Clear all</button>
-          <span className="text-xs" style={{ color: colors.textMuted }}>{unread > 0 ? `${unread} unread` : 'All read'}</span>
-        </div>
+      {showImg ? (
+        <img
+          src={avatar}
+          alt="avatar"
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <span style={{ color: '#fff', fontSize: size * 0.375 }}>{initials}</span>
       )}
     </div>
   );
 }
 
 // ─── Profile Dropdown ─────────────────────────────────────────────────────────
-function ProfileDropdown({ colors, accent, lvl, profile, profileInitials, onClose }) {
+function ProfileDropdown({ colors, accent, lvl, realXP, profile, profileInitials, onClose }) {
   const navigate = useNavigate();
   const panelRef = useRef(null);
   const isMobile = useIsMobile(640);
@@ -241,10 +136,15 @@ function ProfileDropdown({ colors, accent, lvl, profile, profileInitials, onClos
       style={{ ...posStyle, background: colors.card, border: `1px solid ${colors.border}` }}>
       <div className="p-4" style={{ borderBottom: `1px solid ${colors.border}` }}>
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-sm text-white flex-shrink-0"
-            style={{ fontWeight: 800, background: `linear-gradient(135deg, ${accent.main}, ${accent.light})`, boxShadow: `0 0 16px rgba(${accent.rgb},.4)` }}>
-            {profileInitials}
-          </div>
+          {/* ✅ FIXED: was always showing initials text, now shows avatar photo */}
+          <AvatarCircle
+            avatar={profile.avatar}
+            initials={profileInitials}
+            size={44}
+            accent={accent}
+            borderRadius="12px"
+            boxShadow={`0 0 16px rgba(${accent.rgb},.4)`}
+          />
           <div className="min-w-0">
             <p className="text-sm truncate" style={{ fontWeight: 700, color: colors.text }}>{profile.name}</p>
             <p className="text-xs" style={{ color: accent.main, fontWeight: 500 }}>Pro Scholar</p>
@@ -253,12 +153,12 @@ function ProfileDropdown({ colors, accent, lvl, profile, profileInitials, onClos
         <div className="rounded-xl p-2.5" style={{ background: colors.card2 ?? colors.bg }}>
           <div className="flex justify-between mb-1.5">
             <span className="text-xs" style={{ color: colors.textMuted }}>Lv {lvl.level} · {lvl.name}</span>
-            <span className="text-xs" style={{ fontWeight: 600, color: accent.main }}>{DEMO_XP.toLocaleString()} XP</span>
+            <span className="text-xs" style={{ fontWeight: 600, color: accent.main }}>{realXP.toLocaleString()} XP</span>
           </div>
           <div className="h-1.5 rounded-full" style={{ background: colors.border }}>
             <div className="h-full rounded-full" style={{ width: `${lvl.progress}%`, background: `linear-gradient(90deg, ${accent.main}, ${accent.light})` }} />
           </div>
-          <p className="text-xs mt-1" style={{ color: colors.textMuted }}>{(lvl.nextXP - DEMO_XP).toLocaleString()} XP to Level {lvl.level + 1}</p>
+          <p className="text-xs mt-1" style={{ color: colors.textMuted }}>{(lvl.nextXP - realXP).toLocaleString()} XP to Level {lvl.level + 1}</p>
         </div>
       </div>
       <div className="p-2">
@@ -291,15 +191,13 @@ function ProfileDropdown({ colors, accent, lvl, profile, profileInitials, onClos
 }
 
 // ─── Sidebar Content ──────────────────────────────────────────────────────────
-function SidebarContent({ notifs, collapsed, isMobile, colors, accent, lvl, showStreak, showXPBar, compactMode, animations, showNotifs, showProfile, setShowNotifs, setShowProfile, onClose, profile, profileInitials }) {
+function SidebarContent({ collapsed, isMobile, colors, accent, lvl, realXP, realStreak, showStreak, showXPBar, compactMode, animations, showProfile, setShowProfile, onClose, profile, profileInitials }) {
   const navPy = compactMode ? '0.4rem' : '0.6rem';
   const dur   = animations ? '280ms' : '0ms';
 
   const navActiveText   = colors.navActiveText === 'accent' ? accent.main : (colors.navActiveText || '#ffffff');
   const navActiveBg     = `linear-gradient(135deg, rgba(${accent.rgb},0.22), rgba(${accent.rgb},0.10))`;
   const navActiveShadow = `0 0 0 1px rgba(${accent.rgb},0.3), inset 0 1px 0 rgba(255,255,255,0.05)`;
-
-  const unread = Array.isArray(notifs) ? notifs.filter(n => !n.read).length : 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -311,7 +209,7 @@ function SidebarContent({ notifs, collapsed, isMobile, colors, accent, lvl, show
           <Brain className="w-5 h-5 text-white" />
         </div>
         {(!collapsed || isMobile) && (
-          <span className="text-sm flex-1" style={{ fontWeight: 700, color: colors.text }}>StudyFlow</span>
+          <span className="text-sm flex-1" style={{ fontWeight: 700, color: colors.text }}>AcadFlu</span>
         )}
         {isMobile && (
           <button onClick={onClose} className="w-8 h-8 rounded-xl flex items-center justify-center"
@@ -329,9 +227,9 @@ function SidebarContent({ notifs, collapsed, isMobile, colors, accent, lvl, show
               style={{ padding: compactMode ? '8px 12px' : '10px 12px', background: 'linear-gradient(135deg, rgba(249,115,22,.15), rgba(249,115,22,.06))', border: '1px solid rgba(249,115,22,.25)' }}>
               <Flame className="w-4 h-4 flex-shrink-0" style={{ color: '#fb923c' }} />
               <div>
-                <p className="text-xs" style={{ fontWeight: 600, color: '#fb923c' }}>{DEMO_STREAK} Day Streak</p>
-                {!compactMode && <p className="text-xs" style={{ color: colors.textSub }}>Keep it going!</p>}
-              </div>
+  <p className="text-xs" style={{ fontWeight: 600, color: '#fb923c' }}>{realStreak} {realStreak <= 1 ? 'Day' : 'Days'} Streak</p>
+  {!compactMode && <p className="text-xs" style={{ color: colors.textSub }}>Keep it going!</p>}
+</div>
             </div>
           ) : (
             <div className="flex justify-center">
@@ -379,7 +277,7 @@ function SidebarContent({ notifs, collapsed, isMobile, colors, accent, lvl, show
               <Zap className="w-3 h-3" style={{ color: accent.main }} />
               <span className="text-xs" style={{ fontWeight: 600, color: colors.textSub }}>Lv {lvl.level} {lvl.name}</span>
             </div>
-            <span className="text-xs" style={{ color: colors.textMuted }}>{DEMO_XP.toLocaleString()} / {lvl.nextXP.toLocaleString()}</span>
+            <span className="text-xs" style={{ color: colors.textMuted }}>{realXP.toLocaleString()} / {lvl.nextXP.toLocaleString()}</span>
           </div>
           <div className="h-1.5 rounded-full" style={{ background: colors.border }}>
             <div className="h-full rounded-full" style={{
@@ -392,7 +290,7 @@ function SidebarContent({ notifs, collapsed, isMobile, colors, accent, lvl, show
         </div>
       )}
 
-      {/* Bottom: Settings + Profile + Bell */}
+      {/* Bottom: Settings + Profile */}
       <div className="flex-shrink-0" style={{ padding: '0 12px 12px', borderTop: `1px solid ${colors.border}` }}>
         <NavLink to="/app/settings"
           title={collapsed && !isMobile ? 'Settings' : undefined}
@@ -417,20 +315,24 @@ function SidebarContent({ notifs, collapsed, isMobile, colors, accent, lvl, show
 
         {/* Profile row */}
         {(!collapsed || isMobile) ? (
-          <div className="flex items-center gap-1.5 mt-1">
+          <div className="mt-1">
             <button
               data-profile-trigger
-              onClick={() => { setShowProfile(v => !v); setShowNotifs(false); }}
-              className="flex-1 min-w-0 flex items-center gap-2.5 rounded-xl transition-colors text-left"
+              onClick={() => setShowProfile(v => !v)}
+              className="w-full flex items-center gap-2.5 rounded-xl transition-colors text-left"
               style={{ padding: `${navPy} 12px`, border: 'none', cursor: 'pointer', background: showProfile ? `rgba(${accent.rgb},.08)` : 'transparent' }}
               onMouseEnter={e => e.currentTarget.style.background = `rgba(${accent.rgb},.08)`}
               onMouseLeave={e => { if (!showProfile) e.currentTarget.style.background = 'transparent'; }}
             >
+              {/* ✅ FIXED: was always showing initials, now shows avatar photo */}
               <div className="relative flex-shrink-0">
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs text-white"
-                  style={{ fontWeight: 700, background: `linear-gradient(135deg, ${accent.main}, ${accent.light})` }}>
-                  {profileInitials}
-                </div>
+                <AvatarCircle
+                  avatar={profile.avatar}
+                  initials={profileInitials}
+                  size={32}
+                  accent={accent}
+                  borderRadius="50%"
+                />
                 <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
                   style={{ background: '#22c55e', border: `2px solid ${colors.sidebar}` }} />
               </div>
@@ -439,38 +341,22 @@ function SidebarContent({ notifs, collapsed, isMobile, colors, accent, lvl, show
                 <p className="text-xs" style={{ color: accent.main, fontWeight: 500 }}>Pro Scholar</p>
               </div>
             </button>
-
-            <button
-              data-notif-trigger
-              onClick={() => { setShowNotifs(v => !v); setShowProfile(false); }}
-              className="relative w-9 h-9 flex-shrink-0 rounded-xl flex items-center justify-center transition-colors"
-              style={{
-                border: showNotifs ? `1px solid rgba(${accent.rgb},.35)` : '1px solid transparent',
-                background: showNotifs ? `rgba(${accent.rgb},.12)` : 'transparent',
-                color: showNotifs ? accent.main : colors.textMuted,
-                cursor: 'pointer',
-              }}
-              onMouseEnter={e => { if (!showNotifs) e.currentTarget.style.background = `rgba(${accent.rgb},.08)`; }}
-              onMouseLeave={e => { if (!showNotifs) e.currentTarget.style.background = 'transparent'; }}
-              title="Notifications"
-            >
-              <Bell className="w-4 h-4" />
-              {unread > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-white flex items-center justify-center"
-                  style={{ background: '#ef4444', fontSize: 9, fontWeight: 700, border: `2px solid ${colors.sidebar}` }}>
-                  {unread > 9 ? '9+' : unread}
-                </span>
-              )}
-            </button>
           </div>
         ) : (
           <div className="flex justify-center mt-2">
+            {/* ✅ FIXED: collapsed sidebar button now also shows avatar photo */}
             <button
               data-profile-trigger
-              onClick={() => { setShowProfile(v => !v); setShowNotifs(false); }}
-              className="relative w-8 h-8 rounded-full flex items-center justify-center text-xs text-white transition-opacity"
-              style={{ fontWeight: 700, background: `linear-gradient(135deg, ${accent.main}, ${accent.light})`, border: 'none', cursor: 'pointer' }}>
-              {profileInitials}
+              onClick={() => setShowProfile(v => !v)}
+              className="relative w-8 h-8 rounded-full transition-opacity"
+              style={{ border: 'none', cursor: 'pointer', padding: 0, background: 'transparent' }}>
+              <AvatarCircle
+                avatar={profile.avatar}
+                initials={profileInitials}
+                size={32}
+                accent={accent}
+                borderRadius="50%"
+              />
               <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
                 style={{ background: '#22c55e', border: `2px solid ${colors.sidebar}` }} />
             </button>
@@ -485,105 +371,41 @@ function SidebarContent({ notifs, collapsed, isMobile, colors, accent, lvl, show
 export function Layout() {
   const [collapsed,   setCollapsed]   = useState(false);
   const [mobileOpen,  setMobileOpen]  = useState(false);
-  const [showNotifs,  setShowNotifs]  = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [notifs, setNotifs] = useState([]);
-  const [notifsLoading, setNotifsLoading] = useState(true);
 
   const location = useLocation();
   const { accent, colors, compactMode, animations, showXPBar, showStreak } = useAppearance();
 
-  const lvl     = getLevelInfo(DEMO_XP);
+  const [realXP, setRealXP] = useState(0);
+  const [realStreak, setRealStreak] = useState(0);
+
+  const lvl     = getLevelInfo(realXP);
   const sbWidth = collapsed ? 72 : 240;
   const dur     = animations ? '280ms' : '0ms';
 
-  // Fetch notifications on mount
   useEffect(() => {
-    const fetchNotifs = async () => {
+    const loadRealStats = async () => {
       try {
-        setNotifsLoading(true);
-        const data = await notificationApi.fetchNotifications();
-        const transformed = (data.notifications || []).map(transformNotification);
-        setNotifs(transformed);
+        const data = await fetchAchievements();
+        if (data && data.stats) {
+          setRealXP(data.stats.totalXP || 0);
+          setRealStreak(data.stats.streak || 0);
+        }
       } catch (error) {
-        console.error('Failed to load notifications:', error);
-        setNotifs([]);
-      } finally {
-        setNotifsLoading(false);
+        console.error('Failed to load real stats for sidebar:', error);
       }
     };
-
-    const token = localStorage.getItem('token');
-    if (token) {
-      fetchNotifs();
-    }
-  }, []);
-
-  // Refetch notifications (called after user actions)
-  const refetchNotifications = useCallback(async () => {
-    try {
-      const data = await notificationApi.fetchNotifications();
-      const transformed = (data.notifications || []).map(transformNotification);
-      setNotifs(transformed);
-    } catch (error) {
-      console.error('Failed to refetch notifications:', error);
-    }
-  }, []);
-
-  // Handlers for notification actions
-  const handleMarkAsRead = async (notifId) => {
-    try {
-      await notificationApi.markAsRead(notifId);
-      setNotifs(prev => prev.map(n => n.id === notifId ? { ...n, read: true } : n));
-    } catch (error) {
-      console.error('Failed to mark notification as read:', error);
-    }
-  };
-
-  const handleMarkAllAsRead = async () => {
-    try {
-      await notificationApi.markAllAsRead();
-      setNotifs(prev => prev.map(n => ({ ...n, read: true })));
-    } catch (error) {
-      console.error('Failed to mark all as read:', error);
-    }
-  };
-
-  const handleDeleteNotification = async (notifId) => {
-    try {
-      await notificationApi.deleteNotification(notifId);
-      setNotifs(prev => prev.filter(n => n.id !== notifId));
-    } catch (error) {
-      console.error('Failed to delete notification:', error);
-    }
-  };
-
-  const handleClearAllNotifications = async () => {
-    try {
-      await notificationApi.clearAllNotifications();
-      setNotifs([]);
-    } catch (error) {
-      console.error('Failed to clear notifications:', error);
-    }
-  };
+    loadRealStats();
+  }, [location.pathname]); // Re-fetch every time user changes tabs
 
   useEffect(() => {
-    document.documentElement.style.setProperty('--notif-left',   `${sbWidth + 8}px`);
     document.documentElement.style.setProperty('--profile-left', `${sbWidth + 8}px`);
   }, [sbWidth]);
 
   useEffect(() => {
     setMobileOpen(false);
-    setShowNotifs(false);
     setShowProfile(false);
   }, [location.pathname]);
-
-  // Refetch notifications when panel opens
-  useEffect(() => {
-    if (showNotifs) {
-      refetchNotifications();
-    }
-  }, [showNotifs, refetchNotifications]);
 
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? 'hidden' : '';
@@ -592,7 +414,6 @@ export function Layout() {
 
   const [profile, setProfile] = useState(() => loadSavedProfile());
   const profileInitials = getProfileInitials(profile.name);
-  const unread = Array.isArray(notifs) ? notifs.filter(n => !n.read).length : 0;
 
   useEffect(() => {
     const handleSettingsUpdated = (event) => {
@@ -619,28 +440,13 @@ export function Layout() {
   }, []);
 
   const sidebarProps = {
-    colors, accent, lvl, showStreak, showXPBar, compactMode, animations,
-    showNotifs, showProfile, setShowNotifs, setShowProfile,
-    notifs, profile, profileInitials,
+    colors, accent, lvl, realXP, realStreak, showStreak, showXPBar, compactMode, animations,
+    showProfile, setShowProfile,
+    profile, profileInitials,
   };
 
   return (
     <div className="sf-root flex h-screen overflow-hidden" style={{ background: colors.bg, fontFamily: "'Inter', sans-serif" }}>
-
-      {/* Notification Panel */}
-      {showNotifs && (
-        <NotifPanel
-          notifs={notifs}
-          onMarkRead={handleMarkAsRead}
-          onMarkAllRead={handleMarkAllAsRead}
-          onDelete={handleDeleteNotification}
-          onClearAll={handleClearAllNotifications}
-          colors={colors}
-          accent={accent}
-          onClose={() => setShowNotifs(false)}
-          animations={animations}
-        />
-      )}
 
       {/* Profile Panel */}
       {showProfile && (
@@ -649,6 +455,7 @@ export function Layout() {
           colors={colors}
           accent={accent}
           lvl={lvl}
+          realXP={realXP}
           profile={profile}
           profileInitials={profileInitials}
           onClose={() => setShowProfile(false)}
@@ -692,34 +499,28 @@ export function Layout() {
               style={{ background: `linear-gradient(135deg, ${accent.main}, ${accent.light})` }}>
               <Brain className="w-4 h-4 text-white" />
             </div>
-            <span className="text-sm" style={{ fontWeight: 700, color: colors.text }}>StudyFlow</span>
+            <span className="text-sm" style={{ fontWeight: 700, color: colors.text }}>Acadflu</span>
           </div>
-          <button data-notif-trigger onClick={() => setShowNotifs(v => !v)}
-            className="relative w-9 h-9 rounded-xl flex items-center justify-center"
-            style={{ background: colors.card, color: colors.textSub, border: 'none', cursor: 'pointer' }}>
-            <Bell className="w-4 h-4" />
-            {unread > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-white"
-                style={{ background: '#ef4444', fontSize: 9, fontWeight: 700 }}>
-                {unread}
-              </span>
-            )}
-          </button>
+          {/* ✅ FIXED: mobile header button now shows avatar photo */}
           <button
             data-profile-trigger
-            onClick={() => { setShowProfile(v => !v); setShowNotifs(false); }}
-            className="relative w-8 h-8 rounded-full flex items-center justify-center text-xs text-white flex-shrink-0"
-            style={{ fontWeight: 700, background: `linear-gradient(135deg, ${accent.main}, ${accent.light})`, border: 'none', cursor: 'pointer' }}>
-            {profileInitials}
+            onClick={() => setShowProfile(v => !v)}
+            className="relative w-8 h-8 rounded-full flex-shrink-0"
+            style={{ border: 'none', cursor: 'pointer', padding: 0, background: 'transparent' }}>
+            <AvatarCircle
+              avatar={profile.avatar}
+              initials={profileInitials}
+              size={32}
+              accent={accent}
+              borderRadius="50%"
+            />
             <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
               style={{ background: '#22c55e', border: `2px solid ${colors.sidebar}` }} />
           </button>
         </header>
 
         <main key={location.pathname} className={`flex-1 overflow-y-auto ${animations ? 'animate-in fade-in slide-in-from-top-2' : ''}`} style={{ overflowX: 'hidden' }}>
-          <NotificationRefreshContext.Provider value={{ refetch: refetchNotifications }}>
-            <Outlet />
-          </NotificationRefreshContext.Provider>
+          <Outlet />
         </main>
       </div>
     </div>

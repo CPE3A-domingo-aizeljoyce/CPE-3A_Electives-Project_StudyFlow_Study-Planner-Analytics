@@ -2,10 +2,12 @@ import crypto from 'crypto';
 import dns    from 'dns';
 import { google }         from 'googleapis';
 import User               from '../models/User.js';
-import StudySession       from '../models/StudySession.js';
+import StudySession       from '../models/studySessionModel.js';
 import Task               from '../models/Task.js';
 import Goal               from '../models/goalModel.js';
-import Notification       from '../models/Notification.js';
+import Note               from '../models/Note.js';
+import Achievement        from '../models/Achievement.js';
+import UserSettings       from '../models/UserSettings.js';
 import { generateToken }  from '../utils/generateToken.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/sendEmail.js';
 
@@ -228,44 +230,80 @@ export const googleCallback = async (req, res) => {
   try {
     const { code, error } = req.query;
 
-    if (error || !code)
+    if (error || !code) {
+      console.warn('[Google OAuth] Callback cancelled or missing code:', error);
       return res.redirect(`${process.env.CLIENT_URL}/login?error=google_cancelled`);
+    }
 
+    console.log('[Google OAuth] Exchanging code for tokens…');
     const { tokens } = await oauth2Client.getToken(code);
     oauth2Client.setCredentials(tokens);
+
+    console.log('[Google OAuth] Tokens received:', {
+      hasAccessToken:  !!tokens.access_token,
+      hasRefreshToken: !!tokens.refresh_token,
+      expiryDate:      tokens.expiry_date,
+      scope:           tokens.scope,
+    });
 
     const oauth2   = google.oauth2({ version: 'v2', auth: oauth2Client });
     const { data } = await oauth2.userinfo.get();
     const { id: googleId, email, name, picture } = data;
 
-    if (!email)
-      return res.redirect(`${process.env.CLIENT_URL}/login?error=no_email`);
+    console.log('[Google OAuth] User info fetched:', { googleId, email, name });
 
+    if (!email) {
+      console.error('[Google OAuth] No email returned from Google');
+      return res.redirect(`${process.env.CLIENT_URL}/login?error=no_email`);
+    }
+
+    // ── Find or create user ────────────────────────────────────────────────────
     let user = await User.findOne({ googleId });
+    let isNewLink = false;
 
     if (!user) {
       user = await User.findOne({ email });
       if (user) {
+        // ✅ Link existing email/password account to this Google account
+        console.log('[Google OAuth] Linking Google to existing email account:', email);
         user.googleId   = googleId;
         user.avatar     = user.avatar || picture;
         user.isVerified = true;
+        isNewLink = true;
       } else {
+        // ✅ Brand new user via Google
+        console.log('[Google OAuth] Creating new Google user:', email);
         user = new User({ name, email, googleId, avatar: picture, isVerified: true });
       }
+    } else {
+      console.log('[Google OAuth] Existing Google user found:', email);
     }
 
+    // ── Save Google tokens ────────────────────────────────────────────────────
     user.googleAccessToken = tokens.access_token;
     user.googleTokenExpiry = tokens.expiry_date;
+
     if (tokens.refresh_token) {
+      console.log('[Google OAuth] Saving new refresh token for:', email);
       user.googleRefreshToken = tokens.refresh_token;
+    } else if (!user.googleRefreshToken) {
+      // ⚠️ No refresh token and none saved — Calendar sync will fail
+      console.warn('[Google OAuth] No refresh token received and none saved for:', email,
+        '— User may need to revoke Google access and re-authorize.');
+    } else {
+      console.log('[Google OAuth] Using existing saved refresh token for:', email);
     }
+
     await user.save();
+    console.log('[Google OAuth] User saved. hasGoogleCalendar:', !!user.googleRefreshToken);
 
     const jwtToken = generateToken(user._id);
-    res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${jwtToken}&verified=true`);
+    const redirectUrl = `${process.env.CLIENT_URL}/auth/callback?token=${jwtToken}&verified=true`;
+    console.log('[Google OAuth] Redirecting to:', redirectUrl.replace(jwtToken, '[JWT]'));
+    res.redirect(redirectUrl);
 
   } catch (err) {
-    console.error('Google callback error:', err);
+    console.error('[Google OAuth] Callback error:', err.message);
     res.redirect(`${process.env.CLIENT_URL}/login?error=google_failed`);
   }
 };
@@ -321,12 +359,16 @@ export const forgotPassword = async (req, res) => {
     if (!email)
       return res.status(400).json({ message: 'Email is required.' });
 
-    const user = await User.findOne({ email: email.trim().toLowerCase() });
+    // ✅ FIX: Added .select('+password') — password field has select:false in the model,
+    // so without this, user.password is always undefined, making all Gmail users
+    // (who have googleId set from verification flow) appear as Google-only accounts.
+    const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+password');
 
     const safeMsg = 'If that email is registered, you will receive a reset link shortly.';
 
     if (!user) return res.status(200).json({ message: safeMsg });
 
+    // Only block reset if it's a pure Google account (googleId set AND no password at all)
     if (user.googleId && !user.password)
       return res.status(200).json({
         message:         'This account was created with Google. Please use "Continue with Google" to sign in.',
@@ -410,24 +452,49 @@ export const getMe = async (req, res) => {
 
 // ── DELETE /api/auth/delete-account ──────────────────────────────────────────
 export const deleteAccount = async (req, res) => {
+  const userId = req.user._id;
+  const step   = { name: 'init' };   // tracks which step failed
+
   try {
-    const userId = req.user._id;
+    console.log('[deleteAccount] ▶ Starting for userId:', userId.toString());
 
-    // Cascade delete — tanggalin lahat ng data ng user
-    await Promise.all([
-      StudySession.deleteMany({ user: userId }),
-      Task        .deleteMany({ user: userId }),
-      Goal        .deleteMany({ user: userId }),
-      Notification.deleteMany({ user: userId }),
-    ]);
+    step.name = 'StudySession';
+    const r1 = await StudySession.deleteMany({ user: userId });
+    console.log('[deleteAccount] ✓ StudySessions deleted:', r1.deletedCount);
 
-    // Tanggalin ang user mismo
+    step.name = 'Task';
+    const r2 = await Task.deleteMany({ user: userId });
+    console.log('[deleteAccount] ✓ Tasks deleted:', r2.deletedCount);
+
+    step.name = 'Goal';
+    const r3 = await Goal.deleteMany({ user: userId });
+    console.log('[deleteAccount] ✓ Goals deleted:', r3.deletedCount);
+
+    step.name = 'Note';
+    const r4 = await Note.deleteMany({ user: userId });
+    console.log('[deleteAccount] ✓ Notes deleted:', r4.deletedCount);
+
+    step.name = 'Achievement';
+    const r5 = await Achievement.deleteMany({ user: userId });
+    console.log('[deleteAccount] ✓ Achievements deleted:', r5.deletedCount);
+
+    step.name = 'UserSettings';
+    const r6 = await UserSettings.deleteMany({ userId: userId });
+    console.log('[deleteAccount] ✓ UserSettings deleted:', r6.deletedCount);
+
+    step.name = 'User';
     await User.findByIdAndDelete(userId);
+    console.log('[deleteAccount] ✓ User account deleted');
 
-    res.status(200).json({ message: 'Account and all associated data have been deleted.' });
+    console.log('[deleteAccount] ✅ All data deleted successfully for:', userId.toString());
+    return res.status(200).json({ message: 'Account and all associated data have been deleted.' });
 
   } catch (err) {
-    console.error('Delete account error:', err);
-    res.status(500).json({ message: 'Server error. Could not delete account.' });
+    console.error(`[deleteAccount] ✗ FAILED at step "${step.name}":`, err);
+    return res.status(500).json({
+      message: `Server error at step "${step.name}". Could not delete account.`,
+      detail:  err.message,
+      step:    step.name,
+    });
   }
 };

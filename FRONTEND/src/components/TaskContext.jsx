@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import * as taskApi from '../api/taskApi.js';
 
 function getWeekStart(dateStr) {
@@ -49,31 +49,105 @@ function normalizeTask(task) {
   };
 }
 
+function readHasGoogleCalendar() {
+  try {
+    const stored = localStorage.getItem('user');
+    if (!stored) return false;
+    return !!JSON.parse(stored).hasGoogleCalendar;
+  } catch {
+    return false;
+  }
+}
+
+function buildSyncMessage(syncSummary) {
+  if (!syncSummary) return '';
+  const { deleted = 0, updated = 0 } = syncSummary;
+  const parts = [];
+  if (deleted > 0)
+    parts.push(
+      `${deleted} task${deleted !== 1 ? 's were' : ' was'} removed — ` +
+      `Google Calendar event${deleted !== 1 ? 's were' : ' was'} deleted`
+    );
+  if (updated > 0)
+    parts.push(
+      `${updated} task${updated !== 1 ? 's were' : ' was'} updated from Google Calendar`
+    );
+  return parts.join(' · ');
+}
+
 const TaskCtx = createContext(null);
 
 export function TaskProvider({ children }) {
-  const [tasks,       setTasks]   = useState([]);
-  const [sprintGoals, setGoals]   = useState(DEFAULT_SPRINT_GOALS);
-  const [loading,     setLoading] = useState(true);
-  const [error,       setError]   = useState(null);
+  const [tasks,               setTasks]      = useState([]);
+  const [sprintGoals,         setGoals]      = useState(DEFAULT_SPRINT_GOALS);
+  const [loading,             setLoading]    = useState(true);
+  const [error,               setError]      = useState(null);
+  const [hasGoogleCalendar,   setHasGCal]    = useState(readHasGoogleCalendar);
+  const [calendarSyncMessage, setSyncMsg]    = useState('');
+  const [calendarSyncStatus,  setSyncStatus] = useState('idle');
 
   useEffect(() => {
-    const loadTasks = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const data = await taskApi.fetchTasks();
-        setTasks(data.map(normalizeTask));
-      } catch (err) {
-        console.error('Error loading tasks:', err);
+    const sync = () => setHasGCal(readHasGoogleCalendar());
+    window.addEventListener('storage', sync);
+    let count = 0;
+    const timer = setInterval(() => { sync(); if (++count >= 5) clearInterval(timer); }, 2000);
+    return () => { window.removeEventListener('storage', sync); clearInterval(timer); };
+  }, []);
+
+  const loadTasks = useCallback(async (silent = false) => {
+    try {
+      if (!silent) { setLoading(true); setSyncStatus('syncing'); }
+      setError(null);
+
+      const { tasks: rawTasks, syncSummary } = await taskApi.fetchTasks();
+
+      setTasks(rawTasks.map(normalizeTask));
+
+      const msg = buildSyncMessage(syncSummary);
+      if (msg) {
+        setSyncMsg(msg);
+        console.log('[TaskContext] Calendar sync result:', syncSummary, '→', msg);
+      }
+    } catch (err) {
+      console.error('[TaskContext] Error loading tasks:', err);
+      if (!silent) {
         setError(err.message);
         setTasks([]);
-      } finally {
-        setLoading(false);
       }
-    };
-    loadTasks();
+    } finally {
+      if (!silent) { setLoading(false); setSyncStatus('done'); }
+    }
   }, []);
+
+  // Initial load
+  useEffect(() => {
+    loadTasks(false);
+  }, [loadTasks]);
+
+  // 45-second background polling
+  useEffect(() => {
+    const id = setInterval(() => {
+      console.log('[TaskContext] Polling — background sync check');
+      loadTasks(true);
+    }, 45 * 1000);
+    return () => clearInterval(id);
+  }, [loadTasks]);
+
+  // Tab-switch sync — fires the instant the user returns to this tab.
+  // Edit or delete in Google Calendar, switch back here, changes appear in ~1-2s.
+  const lastVisibilitySyncRef = useRef(0);
+  useEffect(() => {
+    const onVisibilityChange = () => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastVisibilitySyncRef.current < 5000) return;
+      lastVisibilitySyncRef.current = now;
+      console.log('[TaskContext] Tab visible — triggering background sync');
+      loadTasks(true);
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [loadTasks]);
 
   const toggle = async (id) => {
     try {
@@ -103,12 +177,35 @@ export function TaskProvider({ children }) {
         endTime:        data.endTime,
         priority:       data.priority,
         description:    data.description || '',
-        syncToCalendar: true,
+        syncToCalendar: hasGoogleCalendar && data.syncToCalendar === true,
       });
       setTasks(prev => [...prev, normalizeTask(newTask)]);
+      return normalizeTask(newTask);
     } catch (err) {
       console.error('Error creating task:', err);
       setError(err.message);
+      throw err;
+    }
+  };
+
+  const editTask = async (id, data) => {
+    try {
+      const updated = await taskApi.updateExistingTask(id, {
+        title:          data.title,
+        subject:        data.subject,
+        date:           data.date,
+        startTime:      data.startTime,
+        endTime:        data.endTime,
+        priority:       data.priority,
+        description:    data.description || '',
+        syncToCalendar: hasGoogleCalendar ? data.syncToCalendar : false,
+      });
+      setTasks(prev => prev.map(t => t.id === id ? normalizeTask(updated) : t));
+      return normalizeTask(updated);
+    } catch (err) {
+      console.error('Error updating task:', err);
+      setError(err.message);
+      throw err;
     }
   };
 
@@ -123,13 +220,20 @@ export function TaskProvider({ children }) {
 
   const updateGoal = (num, goal) => setGoals(prev => ({ ...prev, [num]: goal }));
 
+  const dismissSyncMessage = () => setSyncMsg('');
+
   return (
     <TaskCtx.Provider value={{
       tasks,
       sprintGoals,
+      hasGoogleCalendar,
+      calendarSyncStatus,
+      calendarSyncMessage,
+      dismissSyncMessage,
       toggle,
       remove,
       addTask,
+      editTask,
       moveToCol,
       updateGoal,
       loading,

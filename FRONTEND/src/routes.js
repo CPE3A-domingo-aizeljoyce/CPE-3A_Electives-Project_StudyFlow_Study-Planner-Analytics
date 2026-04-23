@@ -5,7 +5,7 @@ import { Layout }        from './components/Layout';
 import { Landing }       from './pages/Landing';
 import { Login }         from './pages/Login';
 import { AuthCallback }  from './pages/AuthCallback';
-import { ResetPassword } from './pages/ResetPassword';   // ← ADDED
+import { ResetPassword } from './pages/ResetPassword';
 import { Dashboard }     from './pages/Dashboard';
 import { Tasks }         from './pages/Tasks';
 import { StudyTimer }    from './pages/Timer';
@@ -14,6 +14,7 @@ import { Goals }         from './pages/Goals';
 import { Notes }         from './pages/Notes';
 import { Achievements }  from './pages/Achievements';
 import { Settings }      from './pages/Settings';
+import { AboutUs } from './pages/AboutUs';
 
 function ProtectedRoute() {
   const token = localStorage.getItem('token');
@@ -27,8 +28,9 @@ export const router = createBrowserRouter([
     children: [
       { path: '/',               Component: Landing      },
       { path: '/login',          Component: Login        },
+      { path: '/about',          Component: AboutUs      },
       { path: '/auth/callback',  Component: AuthCallback },
-      { path: '/reset-password', Component: ResetPassword },   // ← ADDED
+      { path: '/reset-password', Component: ResetPassword },
       {
         path: '/app',
         Component: ProtectedRoute,

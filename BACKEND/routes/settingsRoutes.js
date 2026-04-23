@@ -1,20 +1,19 @@
-// SETTINGS ROUTES
-// Manages user preferences and app settings
-//
-// Connected frontend:
-// - Settings.jsx
-//
-// Uses:
-// - Controller: settingsController.js
-// - Model: UserSettings.js
-// - Middleware: authMiddleware.js
+import express from 'express';
+import {
+  getSettings,
+  updateSettings,
+  changePassword,
+  updateAvatar,                          // ✅ was missing
+} from '../controllers/settingsController.js';
+import { protect } from '../middleware/authMiddleware.js';
 
-const express = require('express');
 const router = express.Router();
-const { getSettings, updateSettings } = require('../controllers/settingsController');
-const auth = require('../middleware/authMiddleware');
 
-router.get('/', auth, getSettings);
-router.put('/', auth, updateSettings);
+router.use(protect);   // all settings routes require auth
 
-module.exports = router;
+router.get  ('/',                getSettings);
+router.put  ('/',                updateSettings);
+router.post ('/change-password', changePassword);
+router.patch('/avatar',          updateAvatar);   // ✅ was missing — caused 404 on upload & remove
+
+export default router;

@@ -1,4 +1,4 @@
-import StudySession from '../models/StudySession.js';
+import StudySession from '../models/studySessionModel.js';
 import mongoose    from 'mongoose';
 import {
   startTimeEntry,
@@ -6,6 +6,7 @@ import {
   deleteTimeEntry,
   getTimeEntries,
 } from '../utils/clockifyService.js';
+import { checkAndAwardAchievements } from '../utils/achievementService.js';
 
 // ─── Helper: safe Clockify call (never crashes the main flow) ─────────────────
 const safeClockify = async (fn, label) => {
@@ -39,16 +40,15 @@ export const startStudySession = async (req, res) => {
     if (existingSession) {
       return res.status(400).json({
         message: 'You already have an active study session. Please stop it before starting a new one.',
+        existingSession,
       });
     }
 
-    // ── Clockify: start time entry ──────────────────────────────────────────
     const clockifyEntry = await safeClockify(
       () => startTimeEntry({ description: `${title} [${subject}]` }),
       'startTimeEntry'
     );
 
-    // ── Create DB session ───────────────────────────────────────────────────
     const studySession = await StudySession.create({
       user:            req.user._id,
       title,
@@ -88,7 +88,6 @@ export const pauseStudySession = async (req, res) => {
       return res.status(400).json({ message: 'Can only pause a running session' });
     }
 
-    // ── Clockify: stop the running timer ────────────────────────────────────
     await safeClockify(() => stopTimeEntry(), 'stopTimeEntry (pause)');
 
     studySession.pause();
@@ -122,7 +121,6 @@ export const resumeStudySession = async (req, res) => {
       return res.status(400).json({ message: 'Can only resume a paused session' });
     }
 
-    // ── Clockify: start a new time entry for the resumed session ────────────
     const clockifyEntry = await safeClockify(
       () => startTimeEntry({ description: `${studySession.title} [${studySession.subject}] (resumed)` }),
       'startTimeEntry (resume)'
@@ -164,13 +162,16 @@ export const stopStudySession = async (req, res) => {
       return res.status(400).json({ message: 'Session is already stopped' });
     }
 
-    // ── Clockify: stop the running timer ────────────────────────────────────
     await safeClockify(() => stopTimeEntry(), 'stopTimeEntry (stop)');
 
     if (notes !== undefined) studySession.notes = notes;
 
     studySession.stop();
     await studySession.save();
+
+    // Achievement hook — non-blocking
+    checkAndAwardAchievements(req.user._id)
+      .catch(err => console.error('[Achievements] stopStudySession hook error:', err.message));
 
     res.json({ success: true, data: studySession, message: 'Study session completed successfully' });
   } catch (error) {
@@ -200,10 +201,8 @@ export const abandonStudySession = async (req, res) => {
       return res.status(400).json({ message: 'Cannot abandon a completed session' });
     }
 
-    // ── Clockify: stop the timer if it was running ───────────────────────────
     await safeClockify(() => stopTimeEntry(), 'stopTimeEntry (abandon)');
 
-    // Delete the session entirely — user chose not to save it
     await StudySession.findByIdAndDelete(id);
 
     res.json({ success: true, message: 'Study session abandoned and removed' });
@@ -223,6 +222,7 @@ export const getStudySessions = async (req, res) => {
       limit     = 10,
       status,
       subject,
+      mode,          // ← ADDED: filter by mode (work / short / long)
       startDate,
       endDate,
       sort      = '-startTime',
@@ -232,6 +232,7 @@ export const getStudySessions = async (req, res) => {
 
     if (status)  query.status  = status;
     if (subject) query.subject = new RegExp(subject, 'i');
+    if (mode)    query.mode    = mode;  // ← ADDED
 
     if (startDate || endDate) {
       query.startTime = {};
@@ -415,7 +416,6 @@ export const deleteStudySession = async (req, res) => {
       });
     }
 
-    // ── Clockify: delete the entry if it exists ──────────────────────────────
     if (studySession.clockifyEntryId) {
       await safeClockify(
         () => deleteTimeEntry(studySession.clockifyEntryId),
@@ -463,5 +463,50 @@ export const getClockifyEntries = async (req, res) => {
   } catch (error) {
     console.error('Error fetching Clockify entries:', error);
     res.status(500).json({ message: 'Failed to fetch Clockify entries', error: error.message });
+  }
+};
+
+// @desc    Get raw session data for Analytics computations
+// @route   GET /api/study-timer/analytics
+// @access  Private
+export const getAnalyticsData = async (req, res) => {
+  try {
+    const { timeframe } = req.query;
+    const userId = req.user.id || req.user._id;
+
+    const now = new Date();
+    let startDate = new Date();
+
+    if (timeframe === 'daily') startDate.setHours(0, 0, 0, 0);
+    else if (timeframe === 'weekly') startDate.setDate(now.getDate() - 7);
+    else if (timeframe === 'monthly') startDate.setDate(now.getDate() - 30);
+    else startDate.setDate(now.getDate() - 7); // Default to weekly
+
+    const sessions = await StudySession.find({
+      user: userId,
+      status: 'completed',
+      startTime: { $gte: startDate }
+    }).sort({ startTime: 1 });
+
+    // I-format ang bawat session para mabasa ng Analytics.jsx display logic
+    const formattedData = sessions.map(session => {
+      // Compute actual duration in minutes (Duration minus Paused time)
+      const actualSeconds = Math.max(0, (session.duration || 0) - (session.pausedDuration || 0));
+      
+      // 🌟 TEST FIX: Kung mas mababa sa 1 minute (dahil sa trial/test), gawin nating 1 minute
+      const durationMinutes = actualSeconds < 60 ? 1 : Math.floor(actualSeconds / 60);
+
+      return {
+        id: session._id,
+        subject: session.subject || 'General',
+        date: session.startTime,
+        durationMinutes: durationMinutes
+      };
+    });
+
+    res.status(200).json(formattedData);
+  } catch (error) {
+    console.error('Analytics Backend Error:', error);
+    res.status(500).json({ message: 'Failed to fetch analytics data' });
   }
 };
