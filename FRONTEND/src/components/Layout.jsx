@@ -3,14 +3,13 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import {
   LayoutDashboard, ListTodo, Timer, BarChart2, Target, BookOpen, Trophy,
   Flame, Zap, X, Brain, Settings, ChevronLeft, ChevronRight,
-  User, LogOut, Palette, Menu,
+  User, LogOut, Palette, Menu, MoreHorizontal,
 } from 'lucide-react';
 import { useAppearance } from './AppearanceProvider';
 import { logoutUser } from '../api/authApi';
-
 import { fetchAchievements } from '../api/achievementsApi';
 
-// ─── Reactive mobile-width hook ───────────────────────────────────────────────
+// ─── Hooks ────────────────────────────────────────────────────────────────────
 function useIsMobile(breakpoint = 640) {
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' ? window.innerWidth < breakpoint : false
@@ -38,7 +37,7 @@ function getLevelInfo(xp) {
   return { level, name, xp, levelXP, nextXP, progress };
 }
 
-// ─── Navigation items ─────────────────────────────────────────────────────────
+// ─── Nav items ────────────────────────────────────────────────────────────────
 const NAV_ITEMS = [
   { to: '/app',              icon: LayoutDashboard, label: 'Dashboard',   end: true },
   { to: '/app/tasks',        icon: ListTodo,        label: 'Tasks'                  },
@@ -49,74 +48,48 @@ const NAV_ITEMS = [
   { to: '/app/achievements', icon: Trophy,          label: 'Achievements'           },
 ];
 
-const SETTINGS_KEY = 'sf_settings';
+// Bottom nav shows these 5 (the rest are in the hamburger drawer)
+const BOTTOM_NAV_ITEMS = [
+  { to: '/app',           icon: LayoutDashboard, label: 'Home',    end: true },
+  { to: '/app/tasks',     icon: ListTodo,        label: 'Tasks'             },
+  { to: '/app/timer',     icon: Timer,           label: 'Timer'             },
+  { to: '/app/analytics', icon: BarChart2,       label: 'Stats'             },
+  { to: '/app/goals',     icon: Target,          label: 'Goals'             },
+];
 
-// ✅ FIX: Removed hardcoded 'Moran' — now uses empty defaults
+const SETTINGS_KEY = 'sf_settings';
 const defaultProfile = { name: '', email: '', avatar: null };
 
-// ✅ FIX: Falls back to 'user' key (set on every login) if sf_settings is empty
 const loadSavedProfile = () => {
   try {
-    // 1st priority: sf_settings (most up-to-date — includes latest avatar/name from Settings page)
-    const raw     = localStorage.getItem(SETTINGS_KEY);
+    const raw = localStorage.getItem(SETTINGS_KEY);
     const payload = raw ? JSON.parse(raw) : null;
     if (payload?.profile?.name) return payload.profile;
-
-    // 2nd priority: 'user' key (set by Login.jsx and AuthCallback on every login)
     const userRaw = localStorage.getItem('user');
     if (userRaw) {
       const u = JSON.parse(userRaw);
-      if (u?.name) return {
-        name:            u.name,
-        email:           u.email  || '',
-        avatar:          u.avatar || null,
-        bio:             '',
-        studyGoal:       '4',
-        isGoogleAccount: false,
-        hasPassword:     true,
-      };
+      if (u?.name) return { name: u.name, email: u.email || '', avatar: u.avatar || null, bio: '', studyGoal: '4', isGoogleAccount: false, hasPassword: true };
     }
   } catch {}
   return defaultProfile;
 };
 
 const getProfileInitials = (name) => {
-  if (!name || !name.trim()) return '??';
-  return name.split(' ').filter(Boolean).map(part => part[0]).join('').slice(0, 2).toUpperCase();
+  if (!name?.trim()) return '??';
+  return name.split(' ').filter(Boolean).map(p => p[0]).join('').slice(0, 2).toUpperCase();
 };
 
-// ─── Avatar circle — shows photo if available, falls back to gradient initials ─
+// ─── AvatarCircle ─────────────────────────────────────────────────────────────
 function AvatarCircle({ avatar, initials, size, accent, borderRadius = '50%', boxShadow }) {
   const [failed, setFailed] = useState(false);
-
-  // Reset failed flag whenever avatar src changes (new upload or removal)
   useEffect(() => { setFailed(false); }, [avatar]);
-
   const showImg = avatar && !failed;
-
   return (
-    <div
-      style={{
-        width: size, height: size, borderRadius,
-        flexShrink: 0, overflow: 'hidden',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontWeight: 700,
-        background: showImg
-          ? 'transparent'
-          : `linear-gradient(135deg, ${accent.main}, ${accent.light})`,
-        boxShadow,
-      }}
-    >
-      {showImg ? (
-        <img
-          src={avatar}
-          alt="avatar"
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-          onError={() => setFailed(true)}
-        />
-      ) : (
-        <span style={{ color: '#fff', fontSize: size * 0.375 }}>{initials}</span>
-      )}
+    <div style={{ width: size, height: size, borderRadius, flexShrink: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, background: showImg ? 'transparent' : `linear-gradient(135deg, ${accent.main}, ${accent.light})`, boxShadow }}>
+      {showImg
+        ? <img src={avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} onError={() => setFailed(true)} />
+        : <span style={{ color: '#fff', fontSize: size * 0.375 }}>{initials}</span>
+      }
     </div>
   );
 }
@@ -128,40 +101,27 @@ function ProfileDropdown({ colors, accent, lvl, realXP, profile, profileInitials
   const isMobile = useIsMobile(640);
 
   const posStyle = isMobile
-    ? { top: 64, left: 8, right: 8, width: 'auto', maxWidth: '100%' }
+    ? { bottom: 72, left: 8, right: 8, width: 'auto', maxWidth: '100%' }
     : { bottom: 80, left: 'var(--profile-left, 16px)', width: 240 };
 
   useEffect(() => {
-    function handleClick(e) {
+    const handleClick = (e) => {
       if (panelRef.current?.contains(e.target)) return;
       if (e.target.closest('[data-profile-trigger]')) return;
       onClose();
-    }
+    };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [onClose]);
 
   const go = (path) => { navigate(path); onClose(); };
 
-  const menuItems = [
-    { icon: User,     label: 'View Profile', path: '/app/settings' },
-    { icon: Palette,  label: 'Appearance',   path: '/app/settings' },
-    { icon: Settings, label: 'Settings',     path: '/app/settings' },
-  ];
-
   return (
     <div ref={panelRef} className="fixed z-[9999] rounded-2xl overflow-hidden shadow-2xl"
       style={{ ...posStyle, background: colors.card, border: `1px solid ${colors.border}` }}>
       <div className="p-4" style={{ borderBottom: `1px solid ${colors.border}` }}>
         <div className="flex items-center gap-3 mb-3">
-          <AvatarCircle
-            avatar={profile.avatar}
-            initials={profileInitials}
-            size={44}
-            accent={accent}
-            borderRadius="12px"
-            boxShadow={`0 0 16px rgba(${accent.rgb},.4)`}
-          />
+          <AvatarCircle avatar={profile.avatar} initials={profileInitials} size={44} accent={accent} borderRadius="12px" boxShadow={`0 0 16px rgba(${accent.rgb},.4)`} />
           <div className="min-w-0">
             <p className="text-sm truncate" style={{ fontWeight: 700, color: colors.text }}>{profile.name}</p>
             <p className="text-xs" style={{ color: accent.main, fontWeight: 500 }}>Pro Scholar</p>
@@ -179,11 +139,15 @@ function ProfileDropdown({ colors, accent, lvl, realXP, profile, profileInitials
         </div>
       </div>
       <div className="p-2">
-        {menuItems.map(item => {
+        {[
+          { icon: User,     label: 'View Profile', path: '/app/settings' },
+          { icon: Palette,  label: 'Appearance',   path: '/app/settings' },
+          { icon: Settings, label: 'Settings',     path: '/app/settings' },
+        ].map(item => {
           const Icon = item.icon;
           return (
             <button key={item.label} onClick={() => go(item.path)}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-colors text-left"
+              className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-colors text-left"
               style={{ color: colors.textSub, background: 'transparent' }}
               onMouseEnter={e => e.currentTarget.style.background = `rgba(${accent.rgb},.08)`}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -195,7 +159,7 @@ function ProfileDropdown({ colors, accent, lvl, realXP, profile, profileInitials
       </div>
       <div className="p-2 pt-0" style={{ borderTop: `1px solid ${colors.border}` }}>
         <button onClick={() => { logoutUser(); navigate('/'); onClose(); }}
-          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-colors text-left"
+          className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-colors text-left"
           style={{ color: '#f87171', background: 'transparent' }}
           onMouseEnter={e => e.currentTarget.style.background = 'rgba(248,113,113,.1)'}
           onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -211,7 +175,6 @@ function ProfileDropdown({ colors, accent, lvl, realXP, profile, profileInitials
 function SidebarContent({ collapsed, isMobile, colors, accent, lvl, realXP, realStreak, showStreak, showXPBar, compactMode, animations, showProfile, setShowProfile, onClose, profile, profileInitials }) {
   const navPy = compactMode ? '0.4rem' : '0.6rem';
   const dur   = animations ? '280ms' : '0ms';
-
   const navActiveText   = colors.navActiveText === 'accent' ? accent.main : (colors.navActiveText || '#ffffff');
   const navActiveBg     = `linear-gradient(135deg, rgba(${accent.rgb},0.22), rgba(${accent.rgb},0.10))`;
   const navActiveShadow = `0 0 0 1px rgba(${accent.rgb},0.3), inset 0 1px 0 rgba(255,255,255,0.05)`;
@@ -285,7 +248,7 @@ function SidebarContent({ collapsed, isMobile, colors, accent, lvl, realXP, real
         ))}
       </nav>
 
-      {/* XP progress bar */}
+      {/* XP bar */}
       {showXPBar && (!collapsed || isMobile) && (
         <div className="mx-3 mb-3 rounded-xl flex-shrink-0"
           style={{ background: colors.card, border: `1px solid ${colors.border}`, padding: compactMode ? '8px 12px' : '10px 12px' }}>
@@ -297,12 +260,7 @@ function SidebarContent({ collapsed, isMobile, colors, accent, lvl, realXP, real
             <span className="text-xs" style={{ color: colors.textMuted }}>{realXP.toLocaleString()} / {lvl.nextXP.toLocaleString()}</span>
           </div>
           <div className="h-1.5 rounded-full" style={{ background: colors.border }}>
-            <div className="h-full rounded-full" style={{
-              width: `${lvl.progress}%`,
-              background: `linear-gradient(90deg, ${accent.main}, ${accent.light})`,
-              boxShadow: `0 0 8px rgba(${accent.rgb},.5)`,
-              transition: animations ? 'width 600ms ease' : 'none',
-            }} />
+            <div className="h-full rounded-full" style={{ width: `${lvl.progress}%`, background: `linear-gradient(90deg, ${accent.main}, ${accent.light})`, boxShadow: `0 0 8px rgba(${accent.rgb},.5)`, transition: animations ? 'width 600ms ease' : 'none' }} />
           </div>
         </div>
       )}
@@ -314,14 +272,11 @@ function SidebarContent({ collapsed, isMobile, colors, accent, lvl, realXP, real
           style={({ isActive }) => ({
             display: 'flex', alignItems: 'center', gap: 10,
             padding: `${navPy} 12px`, borderRadius: 12, fontSize: 13,
-            textDecoration: 'none',
-            justifyContent: collapsed && !isMobile ? 'center' : undefined,
-            marginTop: 12,
-            transition: `background ${dur}, color ${dur}`,
+            textDecoration: 'none', justifyContent: collapsed && !isMobile ? 'center' : undefined,
+            marginTop: 12, transition: `background ${dur}, color ${dur}`,
             color: isActive ? navActiveText : colors.textSub,
             fontWeight: isActive ? 600 : 500,
-          })}
-        >
+          })}>
           {({ isActive }) => (
             <>
               <Settings className="w-4 h-4 flex-shrink-0" style={{ color: isActive ? accent.main : colors.textMuted }} />
@@ -330,27 +285,16 @@ function SidebarContent({ collapsed, isMobile, colors, accent, lvl, realXP, real
           )}
         </NavLink>
 
-        {/* Profile row */}
         {(!collapsed || isMobile) ? (
           <div className="mt-1">
-            <button
-              data-profile-trigger
-              onClick={() => setShowProfile(v => !v)}
+            <button data-profile-trigger onClick={() => setShowProfile(v => !v)}
               className="w-full flex items-center gap-2.5 rounded-xl transition-colors text-left"
               style={{ padding: `${navPy} 12px`, border: 'none', cursor: 'pointer', background: showProfile ? `rgba(${accent.rgb},.08)` : 'transparent' }}
               onMouseEnter={e => e.currentTarget.style.background = `rgba(${accent.rgb},.08)`}
-              onMouseLeave={e => { if (!showProfile) e.currentTarget.style.background = 'transparent'; }}
-            >
+              onMouseLeave={e => { if (!showProfile) e.currentTarget.style.background = 'transparent'; }}>
               <div className="relative flex-shrink-0">
-                <AvatarCircle
-                  avatar={profile.avatar}
-                  initials={profileInitials}
-                  size={32}
-                  accent={accent}
-                  borderRadius="50%"
-                />
-                <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
-                  style={{ background: '#22c55e', border: `2px solid ${colors.sidebar}` }} />
+                <AvatarCircle avatar={profile.avatar} initials={profileInitials} size={32} accent={accent} borderRadius="50%" />
+                <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full" style={{ background: '#22c55e', border: `2px solid ${colors.sidebar}` }} />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-xs truncate" style={{ fontWeight: 600, color: colors.text }}>{profile.name}</p>
@@ -360,25 +304,69 @@ function SidebarContent({ collapsed, isMobile, colors, accent, lvl, realXP, real
           </div>
         ) : (
           <div className="flex justify-center mt-2">
-            <button
-              data-profile-trigger
-              onClick={() => setShowProfile(v => !v)}
+            <button data-profile-trigger onClick={() => setShowProfile(v => !v)}
               className="relative w-8 h-8 rounded-full transition-opacity"
               style={{ border: 'none', cursor: 'pointer', padding: 0, background: 'transparent' }}>
-              <AvatarCircle
-                avatar={profile.avatar}
-                initials={profileInitials}
-                size={32}
-                accent={accent}
-                borderRadius="50%"
-              />
-              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
-                style={{ background: '#22c55e', border: `2px solid ${colors.sidebar}` }} />
+              <AvatarCircle avatar={profile.avatar} initials={profileInitials} size={32} accent={accent} borderRadius="50%" />
+              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full" style={{ background: '#22c55e', border: `2px solid ${colors.sidebar}` }} />
             </button>
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+// ─── Bottom Navigation (mobile only) ─────────────────────────────────────────
+function BottomNav({ colors, accent, animations, onMoreClick, profile, profileInitials, showProfile, setShowProfile }) {
+  const dur = animations ? '200ms' : '0ms';
+
+  return (
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-40 sm:hidden"
+      style={{
+        background: colors.sidebar,
+        borderTop: `1px solid ${colors.border}`,
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
+    >
+      <div className="flex items-center">
+        {BOTTOM_NAV_ITEMS.map(({ to, icon: Icon, label, end }) => (
+          <NavLink
+            key={to} to={to} end={end}
+            className="flex-1 flex flex-col items-center justify-center py-2.5 gap-1 transition-all"
+            style={({ isActive }) => ({
+              color: isActive ? accent.main : colors.textMuted,
+              textDecoration: 'none',
+              transition: `color ${dur}`,
+            })}
+          >
+            {({ isActive }) => (
+              <>
+                <div className="relative">
+                  <Icon className="w-5 h-5" style={{ color: isActive ? accent.main : colors.textMuted }} />
+                  {isActive && (
+                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full" style={{ background: accent.main }} />
+                  )}
+                </div>
+                <span className="text-[9px]" style={{ fontWeight: isActive ? 700 : 500, color: isActive ? accent.main : colors.textMuted }}>
+                  {label}
+                </span>
+              </>
+            )}
+          </NavLink>
+        ))}
+
+        {/* More button */}
+        <button
+          onClick={onMoreClick}
+          className="flex-1 flex flex-col items-center justify-center py-2.5 gap-1"
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.textMuted }}>
+          <MoreHorizontal className="w-5 h-5" />
+          <span className="text-[9px]" style={{ fontWeight: 500 }}>More</span>
+        </button>
+      </div>
+    </nav>
   );
 }
 
@@ -389,9 +377,10 @@ export function Layout() {
   const [showProfile, setShowProfile] = useState(false);
 
   const location = useLocation();
+  const navigate  = useNavigate();
   const { accent, colors, compactMode, animations, showXPBar, showStreak } = useAppearance();
 
-  const [realXP, setRealXP] = useState(0);
+  const [realXP,     setRealXP]     = useState(0);
   const [realStreak, setRealStreak] = useState(0);
 
   const lvl     = getLevelInfo(realXP);
@@ -399,56 +388,37 @@ export function Layout() {
   const dur     = animations ? '280ms' : '0ms';
 
   useEffect(() => {
-    const loadRealStats = async () => {
+    const load = async () => {
       try {
         const data = await fetchAchievements();
-        if (data && data.stats) {
-          setRealXP(data.stats.totalXP || 0);
-          setRealStreak(data.stats.streak || 0);
-        }
-      } catch (error) {
-        console.error('Failed to load real stats for sidebar:', error);
-      }
+        if (data?.stats) { setRealXP(data.stats.totalXP || 0); setRealStreak(data.stats.streak || 0); }
+      } catch {}
     };
-    loadRealStats();
-  }, [location.pathname]); // Re-fetch every time user changes tabs
+    load();
+  }, [location.pathname]);
 
   useEffect(() => {
     document.documentElement.style.setProperty('--profile-left', `${sbWidth + 8}px`);
   }, [sbWidth]);
 
-  useEffect(() => {
-    setMobileOpen(false);
-    setShowProfile(false);
-  }, [location.pathname]);
+  useEffect(() => { setMobileOpen(false); setShowProfile(false); }, [location.pathname]);
 
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
   }, [mobileOpen]);
 
-  // ✅ FIX: loadSavedProfile now falls back to 'user' key — no more "Moran" on first login
   const [profile, setProfile] = useState(() => loadSavedProfile());
   const profileInitials = getProfileInitials(profile.name);
 
   useEffect(() => {
-    // ✅ FIX: Added guard `payload?.profile?.name` to prevent empty profile overwriting real data
-    const handleSettingsUpdated = (event) => {
-      const payload = event?.detail || null;
-      if (payload?.profile?.name) {
-        // Full settings update with a real name — use directly
-        setProfile(payload.profile);
-      } else {
-        // Timer-only or partial update — re-read from localStorage
-        // Now correctly falls back to 'user' key if sf_settings has no name
-        setProfile(loadSavedProfile());
-      }
+    const handleSettingsUpdated = (e) => {
+      const payload = e?.detail || null;
+      if (payload?.profile?.name) setProfile(payload.profile);
+      else setProfile(loadSavedProfile());
     };
-
-    // ✅ FIX: New listener for direct 'userUpdated' events dispatched by Settings
-    // Handles: name change (handleSave), avatar upload (handleSaveAvatar), avatar remove (handleRemoveAvatar)
-    const handleUserUpdated = (event) => {
-      const u = event?.detail;
+    const handleUserUpdated = (e) => {
+      const u = e?.detail;
       if (!u) return;
       setProfile(prev => ({
         ...prev,
@@ -457,18 +427,12 @@ export function Layout() {
         ...(u.email  !== undefined && { email:  u.email  }),
       }));
     };
-
-    // Handles cross-tab localStorage changes (e.g. logout in another tab)
-    const handleStorageChange = (event) => {
-      if (event.key === SETTINGS_KEY || event.key === 'user') {
-        setProfile(loadSavedProfile());
-      }
+    const handleStorageChange = (e) => {
+      if (e.key === SETTINGS_KEY || e.key === 'user') setProfile(loadSavedProfile());
     };
-
     window.addEventListener('studyTimerSettingsUpdated', handleSettingsUpdated);
-    window.addEventListener('userUpdated',               handleUserUpdated);      // ✅ NEW
+    window.addEventListener('userUpdated',               handleUserUpdated);
     window.addEventListener('storage',                   handleStorageChange);
-
     return () => {
       window.removeEventListener('studyTimerSettingsUpdated', handleSettingsUpdated);
       window.removeEventListener('userUpdated',               handleUserUpdated);
@@ -478,8 +442,7 @@ export function Layout() {
 
   const sidebarProps = {
     colors, accent, lvl, realXP, realStreak, showStreak, showXPBar, compactMode, animations,
-    showProfile, setShowProfile,
-    profile, profileInitials,
+    showProfile, setShowProfile, profile, profileInitials,
   };
 
   return (
@@ -488,30 +451,38 @@ export function Layout() {
       {/* Profile Panel */}
       {showProfile && (
         <ProfileDropdown
-          animations={animations}
-          colors={colors}
-          accent={accent}
-          lvl={lvl}
-          realXP={realXP}
-          profile={profile}
-          profileInitials={profileInitials}
+          colors={colors} accent={accent} lvl={lvl} realXP={realXP}
+          profile={profile} profileInitials={profileInitials}
           onClose={() => setShowProfile(false)}
+        />
+      )}
+
+      {/* Mobile drawer overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 sm:hidden"
+          style={{ background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(2px)' }}
+          onClick={() => setMobileOpen(false)}
         />
       )}
 
       {/* Mobile drawer */}
       <aside className="fixed top-0 left-0 h-full z-50 sm:hidden flex-shrink-0"
-        style={{ width: 272, background: colors.sidebar, borderRight: `1px solid ${colors.border}`,
+        style={{
+          width: 272, background: colors.sidebar, borderRight: `1px solid ${colors.border}`,
           transform: mobileOpen ? 'translateX(0)' : 'translateX(-100%)',
           transition: `transform ${dur} cubic-bezier(0.4,0,0.2,1)`,
-          boxShadow: mobileOpen ? '4px 0 32px rgba(0,0,0,.3)' : 'none' }}>
+          boxShadow: mobileOpen ? '4px 0 32px rgba(0,0,0,.3)' : 'none',
+        }}>
         <SidebarContent {...sidebarProps} collapsed={false} isMobile onClose={() => setMobileOpen(false)} />
       </aside>
 
-      {/* Desktop sidebar */}
+      {/* Desktop / tablet sidebar */}
       <aside className="hidden sm:flex flex-col flex-shrink-0 relative h-full"
-        style={{ width: sbWidth, background: colors.sidebar, borderRight: `1px solid ${colors.border}`,
-          transition: `width ${dur} cubic-bezier(0.4,0,0.2,1)` }}>
+        style={{
+          width: sbWidth, background: colors.sidebar, borderRight: `1px solid ${colors.border}`,
+          transition: `width ${dur} cubic-bezier(0.4,0,0.2,1)`,
+        }}>
         <button onClick={() => setCollapsed(c => !c)}
           className="absolute -right-3 top-20 z-10 w-6 h-6 rounded-full flex items-center justify-center"
           style={{ background: accent.main, border: `2px solid ${colors.sidebar}`, cursor: 'pointer' }}>
@@ -531,34 +502,43 @@ export function Layout() {
             style={{ background: colors.card, color: colors.textSub, border: 'none', cursor: 'pointer' }}>
             <Menu className="w-5 h-5" />
           </button>
-          <div className="flex items-center gap-2 flex-1">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
               style={{ background: `linear-gradient(135deg, ${accent.main}, ${accent.light})` }}>
               <Brain className="w-4 h-4 text-white" />
             </div>
-            <span className="text-sm" style={{ fontWeight: 700, color: colors.text }}>Acadflu</span>
+            <span className="text-sm" style={{ fontWeight: 700, color: colors.text }}>AcadFlu</span>
           </div>
-          <button
-            data-profile-trigger
-            onClick={() => setShowProfile(v => !v)}
+          {/* Avatar in top bar for mobile */}
+          <button data-profile-trigger onClick={() => setShowProfile(v => !v)}
             className="relative w-8 h-8 rounded-full flex-shrink-0"
             style={{ border: 'none', cursor: 'pointer', padding: 0, background: 'transparent' }}>
-            <AvatarCircle
-              avatar={profile.avatar}
-              initials={profileInitials}
-              size={32}
-              accent={accent}
-              borderRadius="50%"
-            />
+            <AvatarCircle avatar={profile.avatar} initials={profileInitials} size={32} accent={accent} borderRadius="50%" />
             <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full"
               style={{ background: '#22c55e', border: `2px solid ${colors.sidebar}` }} />
           </button>
         </header>
 
-        <main key={location.pathname} className={`flex-1 overflow-y-auto ${animations ? 'animate-in fade-in slide-in-from-top-2' : ''}`} style={{ overflowX: 'hidden' }}>
+        {/* Page content — add bottom padding on mobile for bottom nav */}
+        <main
+          key={location.pathname}
+          className={`flex-1 overflow-y-auto pb-16 sm:pb-0 ${animations ? 'animate-in fade-in slide-in-from-top-2' : ''}`}
+          style={{ overflowX: 'hidden' }}>
           <Outlet />
         </main>
       </div>
+
+      {/* Bottom Nav — mobile only */}
+      <BottomNav
+        colors={colors}
+        accent={accent}
+        animations={animations}
+        onMoreClick={() => setMobileOpen(true)}
+        profile={profile}
+        profileInitials={profileInitials}
+        showProfile={showProfile}
+        setShowProfile={setShowProfile}
+      />
     </div>
   );
 }
