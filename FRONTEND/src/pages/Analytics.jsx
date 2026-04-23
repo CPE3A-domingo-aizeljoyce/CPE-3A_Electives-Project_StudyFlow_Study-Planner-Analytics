@@ -41,7 +41,7 @@ function PieTooltip({ active, payload }) {
 }
 
 export function Analytics() {
-  const [timeframe, setTimeframe] = useState('daily'); // Set Default to daily para mas makita ang test
+  const [timeframe, setTimeframe] = useState('daily'); 
   const [studyData, setStudyData] = useState([]);
   const { colors, accent } = useAppearance();
 
@@ -81,6 +81,17 @@ useEffect(() => {
       color: ['#6366f1', '#22c55e', '#f97316', '#8b5cf6', '#06b6d4', '#fbbf24', '#ec4899'][i % 7]
     })).sort((a, b) => b.value - a.value);
 
+
+    let dailyGoal = 4; 
+    try {
+      const sfSettings = JSON.parse(localStorage.getItem('sf_settings') || '{}');
+      if (sfSettings.profile && sfSettings.profile.studyGoal) {
+        dailyGoal = Number(sfSettings.profile.studyGoal);
+      }
+    } catch (e) {
+      console.error("Error reading goal:", e);
+    }
+
     let chartData = [];
     if (timeframe === 'weekly') {
       const daysMap = { 'Mon': 0, 'Tue': 0, 'Wed': 0, 'Thu': 0, 'Fri': 0, 'Sat': 0, 'Sun': 0 };
@@ -88,7 +99,8 @@ useEffect(() => {
         const dayName = new Date(s.date).toLocaleDateString('en-US', { weekday: 'short' });
         if (daysMap[dayName] !== undefined) daysMap[dayName] += s.durationMinutes;
       });
-      chartData = Object.keys(daysMap).map(day => ({ day, hours: formatHours(daysMap[day]), target: 4 }));
+    
+      chartData = Object.keys(daysMap).map(day => ({ day, hours: formatHours(daysMap[day]), target: dailyGoal }));
     } else if (timeframe === 'monthly') {
       const weeksMap = { 'Wk 1': 0, 'Wk 2': 0, 'Wk 3': 0, 'Wk 4': 0 };
       studyData.forEach(s => {
@@ -108,7 +120,7 @@ useEffect(() => {
         if (blockHour === 0) label = '12AM';
         if (hoursMap[label] !== undefined) hoursMap[label] += s.durationMinutes;
       });
-      chartData = allLabels.map(day => ({ day, hours: formatHours(hoursMap[day]), target: 2 }));
+      chartData = allLabels.map(day => ({ day, hours: formatHours(hoursMap[day]), target: dailyGoal }));
     }
 
     const productivityMap = {};
