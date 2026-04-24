@@ -209,56 +209,58 @@ export function Dashboard() {
 
       {/* Header */}
       <div style={{ marginBottom: compactMode ? '0.75rem' : '1rem' }}>
-        <div className="flex items-center justify-between mb-1">
+        
+        {/* 🌟 FIXED: Ginawang column sa mobile para nasa taas ang widgets at hindi mag-overlap */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2 sm:mb-1">
           <h1 style={{ fontWeight: 700, fontSize: 'clamp(1rem, 4vw, 1.25rem)', letterSpacing: '-0.4px', lineHeight: 1.2, color: colors.text }}>
             Welcome back to AcadFlu
           </h1>
           
-          {/* HEADER WIDGETS */}
-          <div className="hidden sm:flex items-center gap-3">
+          
+          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 hide-scrollbar" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <style>{`.hide-scrollbar::-webkit-scrollbar { display: none; }`}</style>
             
             {showStreak && (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm"
+              <div className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm shrink-0"
                 style={{ background: `rgba(${accent.rgb},0.15)`, border: `1px solid rgba(${accent.rgb},0.3)`, color: accent.light }}>
-                <Flame className="w-4 h-4 text-orange-400" />
+                <Flame className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-orange-400" />
                <span style={{ fontWeight: 600 }}>{realStreak} {realStreak <= 1 ? 'Day' : 'Days'} Streak</span>
               </div>
             )}
             
             {showXPBar && (
-              <div className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm"
+              <div className="flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm shrink-0"
                 style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.25)', color: '#4ade80' }}>
-                <Zap className="w-4 h-4" />
+                <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span style={{ fontWeight: 600 }}>{realXP.toLocaleString()} XP</span>
               </div>
             )}
 
-           {/* 🌟 FIXED: OVERDUE WIDGET (Laging naka-display para hindi mo akalaing nawawala) */}
-            <div className="relative">
+            {/* OVERDUE DROPDOWN WIDGET */}
+            <div className="relative shrink-0">
               <button 
                 onClick={() => overdueTasks.length > 0 && setShowOverdueDropdown(!showOverdueDropdown)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition-all ${overdueTasks.length > 0 ? 'hover:scale-105 cursor-pointer' : 'opacity-70 cursor-default'}`} 
+                className={`flex items-center gap-1.5 sm:gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl text-xs sm:text-sm transition-all ${overdueTasks.length > 0 ? 'hover:scale-105 cursor-pointer' : 'opacity-70 cursor-default'}`} 
                 style={overdueTasks.length > 0 
                   ? { background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.25)', color: '#ef4444' }
                   : { background: colors.card2, border: `1px solid ${colors.border}`, color: colors.textMuted }
                 }
               >
-                <AlertCircle className="w-4 h-4" />
+                <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span style={{ fontWeight: 600 }}>{overdueTasks.length} Overdue</span>
               </button>
 
               {/* REDESIGNED DROPDOWN MENU */}
               {showOverdueDropdown && overdueTasks.length > 0 && (
-                <div className="absolute right-0 mt-3 w-80 rounded-2xl shadow-xl z-50 overflow-hidden" 
+                <div className="absolute right-0 mt-3 w-[280px] sm:w-80 rounded-2xl shadow-xl z-50 overflow-hidden" 
                      style={{ background: colors.card, border: `1px solid ${colors.border}` }}>
                   
-                  {/* Header ng Dropdown */}
                   <div className="p-4 flex justify-between items-center border-b" style={{ borderColor: colors.border, background: colors.card2 }}>
                     <h4 className="text-xs uppercase tracking-wider" style={{ fontWeight: 700, color: '#ef4444' }}>Action Needed</h4>
                     <button onClick={() => setShowOverdueDropdown(false)} className="text-xs font-medium hover:opacity-70 transition-opacity" style={{ color: colors.textSub }}>Close</button>
                   </div>
                   
-                  {/* Listahan ng Overdue */}
+                 
                   <div className="max-h-72 overflow-y-auto p-3 space-y-3">
                     {overdueTasks.map(task => (
                       <div key={task.id} className="p-4 rounded-2xl flex flex-col gap-3 transition-all" style={{ background: colors.bg, border: `1px solid ${colors.border}` }}>
@@ -273,20 +275,16 @@ export function Dashboard() {
                             onClick={(e) => {
                               e.stopPropagation();
                               const targetId = task._id || task.id;
-                              
-
                               if (targetId && activeUpdateFn) {
                                 activeUpdateFn(targetId, { date: REAL_TODAY });
                               }
-                              
                               if (overdueTasks.length <= 1) setShowOverdueDropdown(false);
                             }} 
                             className="flex-1 py-2 px-3 rounded-xl text-xs transition-all hover:scale-[1.02]" 
                             style={{ background: `linear-gradient(135deg, ${accent.main}, ${accent.light})`, color: '#fff', fontWeight: 600, boxShadow: `0 4px 12px rgba(${accent.rgb}, 0.2)` }}>
                             Move to Today
                           </button>
-
-                          {/* Aesthetic Delete Button */}
+                            
                           <button 
                             onClick={() => setTaskToDelete(task)} 
                             className="w-10 h-10 rounded-xl flex items-center justify-center transition-all hover:bg-red-500/10 text-slate-400 hover:text-red-500" 
@@ -507,7 +505,7 @@ export function Dashboard() {
           </div>
         </div>
       </div>
-      {/* 🌟 CUSTOM DELETE MODAL 🌟 */}
+
       {taskToDelete && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 transition-all" style={{ background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(4px)' }}>
           <div className="rounded-[24px] p-8 w-full max-w-sm flex flex-col items-center text-center shadow-2xl animate-in fade-in zoom-in duration-200"

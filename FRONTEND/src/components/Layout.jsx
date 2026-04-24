@@ -48,15 +48,6 @@ const NAV_ITEMS = [
   { to: '/app/achievements', icon: Trophy,          label: 'Achievements'           },
 ];
 
-// Bottom nav shows these 5 (the rest are in the hamburger drawer)
-const BOTTOM_NAV_ITEMS = [
-  { to: '/app',           icon: LayoutDashboard, label: 'Home',    end: true },
-  { to: '/app/tasks',     icon: ListTodo,        label: 'Tasks'             },
-  { to: '/app/timer',     icon: Timer,           label: 'Timer'             },
-  { to: '/app/analytics', icon: BarChart2,       label: 'Stats'             },
-  { to: '/app/goals',     icon: Target,          label: 'Goals'             },
-];
-
 const SETTINGS_KEY = 'sf_settings';
 const defaultProfile = { name: '', email: '', avatar: null };
 
@@ -317,59 +308,6 @@ function SidebarContent({ collapsed, isMobile, colors, accent, lvl, realXP, real
   );
 }
 
-// ─── Bottom Navigation (mobile only) ─────────────────────────────────────────
-function BottomNav({ colors, accent, animations, onMoreClick, profile, profileInitials, showProfile, setShowProfile }) {
-  const dur = animations ? '200ms' : '0ms';
-
-  return (
-    <nav
-      className="fixed bottom-0 left-0 right-0 z-40 sm:hidden"
-      style={{
-        background: colors.sidebar,
-        borderTop: `1px solid ${colors.border}`,
-        paddingBottom: 'env(safe-area-inset-bottom)',
-      }}
-    >
-      <div className="flex items-center">
-        {BOTTOM_NAV_ITEMS.map(({ to, icon: Icon, label, end }) => (
-          <NavLink
-            key={to} to={to} end={end}
-            className="flex-1 flex flex-col items-center justify-center py-2.5 gap-1 transition-all"
-            style={({ isActive }) => ({
-              color: isActive ? accent.main : colors.textMuted,
-              textDecoration: 'none',
-              transition: `color ${dur}`,
-            })}
-          >
-            {({ isActive }) => (
-              <>
-                <div className="relative">
-                  <Icon className="w-5 h-5" style={{ color: isActive ? accent.main : colors.textMuted }} />
-                  {isActive && (
-                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full" style={{ background: accent.main }} />
-                  )}
-                </div>
-                <span className="text-[9px]" style={{ fontWeight: isActive ? 700 : 500, color: isActive ? accent.main : colors.textMuted }}>
-                  {label}
-                </span>
-              </>
-            )}
-          </NavLink>
-        ))}
-
-        {/* More button */}
-        <button
-          onClick={onMoreClick}
-          className="flex-1 flex flex-col items-center justify-center py-2.5 gap-1"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: colors.textMuted }}>
-          <MoreHorizontal className="w-5 h-5" />
-          <span className="text-[9px]" style={{ fontWeight: 500 }}>More</span>
-        </button>
-      </div>
-    </nav>
-  );
-}
-
 // ─── Main Layout ──────────────────────────────────────────────────────────────
 export function Layout() {
   const [collapsed,   setCollapsed]   = useState(false);
@@ -519,26 +457,15 @@ export function Layout() {
           </button>
         </header>
 
-        {/* Page content — add bottom padding on mobile for bottom nav */}
+        {/* 🌟 FIXED: Tanggal na ang mobile bottom navigation padding 🌟 */}
         <main
           key={location.pathname}
-          className={`flex-1 overflow-y-auto pb-16 sm:pb-0 ${animations ? 'animate-in fade-in slide-in-from-top-2' : ''}`}
+          className={`flex-1 overflow-y-auto sm:pb-0 ${animations ? 'animate-in fade-in slide-in-from-top-2' : ''}`}
           style={{ overflowX: 'hidden' }}>
           <Outlet />
         </main>
       </div>
 
-      {/* Bottom Nav — mobile only */}
-      <BottomNav
-        colors={colors}
-        accent={accent}
-        animations={animations}
-        onMoreClick={() => setMobileOpen(true)}
-        profile={profile}
-        profileInitials={profileInitials}
-        showProfile={showProfile}
-        setShowProfile={setShowProfile}
-      />
     </div>
   );
 }
