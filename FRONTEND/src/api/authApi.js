@@ -1,4 +1,5 @@
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+// 🌟 FIXED: Empty base URL so it automatically uses the current domain (acadflu.com)
+const BASE_URL = '';
 
 // ── Response handler ───────────────────────────────────────────────────────────
 // Handles both { error } and { message } shapes from the backend.
