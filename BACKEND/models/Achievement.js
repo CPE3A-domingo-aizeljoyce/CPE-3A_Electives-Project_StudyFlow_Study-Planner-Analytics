@@ -5,9 +5,13 @@ const achievementSchema = new mongoose.Schema({
   achievementId: { type: String, required: true },
   xpAwarded:     { type: Number, default: 0 },
   unlockedAt:    { type: Date,   default: Date.now },
-}, { timestamps: true });
+}, 
+{ timestamps: true }
+);
 
-// Prevent a user from unlocking the same achievement twice
-achievementSchema.index({ user: 1, achievementId: 1 }, { unique: true });
+// Prevent a user from unlocking the same achievements twice
+achievementSchema.index({ user: 1, achievementId: 1 }, 
+  { unique: true }
+);
 
 export default mongoose.model('Achievement', achievementSchema);

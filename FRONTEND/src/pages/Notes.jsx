@@ -12,8 +12,7 @@ const subjects = ['General','Mathematics','Physics','Chemistry','Biology','Engli
 
 function useIsMobile(breakpoint = 640) {
   const [isMobile, setIsMobile] = useState(() => typeof window !== 'undefined' ? window.innerWidth < breakpoint : false);
-  useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth < breakpoint);
+  useEffect(() => {const handler = () => setIsMobile(window.innerWidth < breakpoint);
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, [breakpoint]);

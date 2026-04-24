@@ -14,7 +14,7 @@ export const getAchievements = async (req, res) => {
 };
 
 // @desc  Manually trigger an achievement check (e.g., on page load)
-// @route POST /api/achievements/check
+// @route POST /api/achievements/checks
 // @access Private
 export const triggerCheck = async (req, res) => {
   try {
