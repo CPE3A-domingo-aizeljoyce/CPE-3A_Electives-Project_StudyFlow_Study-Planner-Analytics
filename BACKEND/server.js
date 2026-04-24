@@ -1,7 +1,9 @@
-import 'dotenv/config';
+import dotenv from 'dotenv'; dotenv.config({ override: true });
 import express   from 'express';
 import cors      from 'cors';
 import helmet    from 'helmet';
+import path      from 'path';
+import { fileURLToPath } from 'url';
 import connectDB from './config/db.js';
 import authRoutes          from './routes/authRoutes.js';
 import goalRoutes          from './routes/goalRoutes.js';
@@ -10,6 +12,9 @@ import timerRoutes         from './routes/timerRoutes.js';
 import noteRoutes          from './routes/notesRoutes.js';
 import achievementsRoutes  from './routes/achievementsRoutes.js';
 import settingsRoutes      from './routes/settingsRoutes.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname  = path.dirname(__filename);
 
 connectDB();
 
@@ -25,7 +30,6 @@ app.use(cors({
   exposedHeaders: ['X-Calendar-Sync'],
 }));
 
-// ✅ FIXED: was '10kb' — base64 avatar uploads are 20–120 KB after compression
 app.use(express.json({ limit: '5mb' }));
 
 app.use('/api/auth',         authRoutes);
@@ -36,8 +40,12 @@ app.use('/api/achievements', achievementsRoutes);
 app.use('/api/notes',        noteRoutes);
 app.use('/api/settings',     settingsRoutes);
 
-app.get('/', (req, res) => res.send('AcadFlu API is running ✅'));
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
+
+app.use(express.static(path.join(__dirname, 'dist')));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

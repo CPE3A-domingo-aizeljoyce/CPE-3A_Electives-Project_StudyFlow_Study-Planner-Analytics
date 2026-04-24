@@ -5,12 +5,10 @@ const FROM      = () => process.env.EMAIL_FROM || 'noreply@acadflu.com';
 
 // ── Verification email ─────────────────────────────────────────────────────────
 export const sendVerificationEmail = async ({ name, email, verificationUrl, googleAuthUrl = null }) => {
-  await getResend().emails.send({
+  const { data, error } = await getResend().emails.send({
     from:     FROM(),
     to:       email,
     subject:  'Verify your AcadFlu account',
-    // ✅ ANTI-SPAM: Plain text version — Gmail/Outlook score emails higher when
-    // both HTML and text versions are provided (avoids "suspicious email" flag)
     text: `
 Welcome to AcadFlu, ${name}!
 
@@ -88,7 +86,7 @@ https://acadflu.com
         </div>
         ` : ''}
 
-        <!-- ✅ ANTI-SPAM: Footer with unsubscribe info & physical address -->
+        <!-- Footer -->
         <div style="margin-top:32px;padding-top:20px;border-top:1px solid #1a2540;text-align:center;">
           <p style="color:#334155;font-size:11px;line-height:1.6;margin:0;">
             You received this email because you signed up for AcadFlu.<br/>
@@ -100,15 +98,21 @@ https://acadflu.com
       </div>
     `,
   });
+
+  if (error) {
+    console.error('[sendEmail] Resend error:', JSON.stringify(error));
+    throw new Error(error.message || 'Email send failed');
+  }
+  console.log('[sendEmail] Sent id:', data?.id);
+  return data;
 };
 
 // ── Password reset email ───────────────────────────────────────────────────────
 export const sendPasswordResetEmail = async ({ name, email, resetUrl }) => {
-  await getResend().emails.send({
+  const { data, error } = await getResend().emails.send({
     from:    FROM(),
     to:      email,
     subject: 'Reset your AcadFlu password',
-    // ✅ ANTI-SPAM: Plain text version
     text: `
 Hi ${name},
 
@@ -159,4 +163,11 @@ https://acadflu.com
       </div>
     `,
   });
+
+  if (error) {
+    console.error('[sendEmail] Resend error:', JSON.stringify(error));
+    throw new Error(error.message || 'Email send failed');
+  }
+  console.log('[sendEmail] Sent id:', data?.id);
+  return data;
 };
